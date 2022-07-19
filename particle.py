@@ -189,7 +189,7 @@ class Eraser(Particle):
         super(Eraser, self).__init__(-1, -1)
 
     @classmethod
-    def update_frame(self, board: List[Union[None, 'Particle']]) -> None:
+    def paint(self, board: List[Union[None, 'Particle']]) -> None:
         pos_x, pos_y = py.mouse.get_pos()
         pos_y //= SCALE
         pos_x //= SCALE

@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Type, Tuple
 from enum import IntEnum, auto
 import numpy as np
 import convert
@@ -7,6 +7,7 @@ import pygame as py
 
 from values import *
 from particle import (
+    Particle,
     Sand,
     Water,
     Wood,
@@ -17,6 +18,28 @@ from particle import (
 )
 
 
+class Brush:
+    def __init__(self, pen: Type[Particle]) -> None:
+        self.pen = pen
+        self.pen_size = PAINT_SCALE
+
+    @property
+    def pen(self) -> Type[Particle]:
+        return self._pen
+    
+    @pen.setter
+    def pen(self, value: Type[Particle]):
+        self._pen = value
+
+    @property
+    def pen_size(self) -> int:
+        return self._pen_size
+    
+    @pen_size.setter
+    def pen_size(self, value: int):
+        self._pen_size = value
+
+
 class Display:
     
     def __init__(self, x: int, y: int) -> None:
@@ -25,9 +48,8 @@ class Display:
 
         self.win = py.display.set_mode((self.win_x, self.win_y))
     
-        self.board = [[None]*(BOARDX) for _ in range(BOARDY)]
-        self.brush = Sand
-        self.brush_size = 1
+        self.board = np.ndarray((BOARDY, BOARDX), dtype=np.object)
+        self.brush = Brush(Sand)
 
     class MouseKey(IntEnum):
             Left = 0
@@ -36,26 +58,31 @@ class Display:
 
     def paint_particles(self) -> None:
         mouse_button_pressed = py.mouse.get_pressed(num_buttons=3)
+        keys = py.key.get_pressed()
+
         if mouse_button_pressed[self.MouseKey.Left]:
-            self.brush.paint(self.board)
+            self.brush.pen.paint(self.board)
 
         if mouse_button_pressed[self.MouseKey.Scrol]:
-            self.brush = Sand
+            self.brush.pen = Sand
         elif mouse_button_pressed[self.MouseKey.Right]:
-            self.brush = Water
-        
-        keys = py.key.get_pressed()
-        if keys[py.K_q]:
-            self.brush = Wood
+            self.brush.pen = Water        
+        elif keys[py.K_q]:
+            self.brush.pen = Wood
         elif keys[py.K_w]:
-            self.brush = Eraser
+            self.brush.pen = Eraser
         elif keys[py.K_e]:
-            self.brush = Fire
+            self.brush.pen = Fire
         elif keys[py.K_r]:
-            self.brush = Smoke
+            self.brush.pen = Smoke
+        
+        if keys[py.K_LEFTBRACKET]:
+            self.brush.pen_size -= 1
+        elif keys[py.K_RIGHTBRACKET]:
+            self.brush.pen_size += 1
 
     def draw_cursor(self) -> None:
-        py.draw.circle(self.win, (66, 66, 66), py.mouse.get_pos(), PAINT_SCALE*(SCALE+self.brush_size), 2)
+        py.draw.circle(self.win, (66, 66, 66), py.mouse.get_pos(), PAINT_SCALE*(SCALE+self.brush.pen_size), 2)
 
     def fill(self, color: Tuple[int, ...]) -> None:
         self.win.fill(color)

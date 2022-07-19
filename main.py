@@ -46,10 +46,6 @@ class SandSim:
                     py.quit()
                 if event.key == py.K_p:
                     self.sim = False if self.sim else True
-                if event.key == py.K_LEFTBRACKET:
-                    self.display.brush_size -= 1
-                if event.key == py.K_RIGHTBRACKET:
-                    self.display.brush_size += 1
                 if event.key == py.K_n:
                     self.display.map_colors()
 
