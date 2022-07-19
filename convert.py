@@ -1,10 +1,12 @@
+from typing import Tuple
+
 from values import *
 from numpy import array
 from PIL import Image
 from tkinter import filedialog, Tk
 
 
-def convert_img():
+def convert_img() -> Tuple[array, int, int]:
     Tk().withdraw()
     filename = filedialog.askopenfilename()
     if not filename:

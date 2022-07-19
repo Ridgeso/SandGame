@@ -11,20 +11,22 @@ current_brush = Sand
 
 def paint_particles():
     global current_brush
-    if py.mouse.get_pressed()[0]:
+
+    mouse_button_pressed = py.mouse.get_pressed(num_buttons=3)
+    if mouse_button_pressed[0]:
         current_brush.paint(board, py.mouse.get_pos())
 
-    if py.mouse.get_pressed()[1]:
+    if mouse_button_pressed[1]:
         current_brush = Sand
-    if py.mouse.get_pressed()[2]:
+    elif mouse_button_pressed[2]:
         current_brush = Water
-    if py.key.get_pressed()[113]:
+    elif py.key.get_pressed()[py.K_q]:
         current_brush = Wood
-    if py.key.get_pressed()[119]:
+    elif py.key.get_pressed()[py.K_w]:
         current_brush = Eraser
-    if py.key.get_pressed()[101]:
+    elif py.key.get_pressed()[py.K_e]:
         current_brush = Fire
-    if py.key.get_pressed()[114]:
+    elif py.key.get_pressed()[py.K_r]:
         current_brush = Smoke
 
 
