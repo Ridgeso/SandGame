@@ -7,14 +7,14 @@ from draw import (
 
 
 class SandSim:
-    def __init__(self, ) -> None:
-            py.init()
+    def __init__(self) -> None:
+        py.init()
 
-            self.display = Display(WX, WY)
-            self.clock = py.time.Clock()
+        self.display = Display(WX, WY)
+        self.clock = py.time.Clock()
 
-            self.sim = False
-            self.is_running = True
+        self.sim = False
+        self.is_running = True
     
     def run(self) -> None:
         while self.is_running:

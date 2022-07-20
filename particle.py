@@ -1,5 +1,6 @@
-from typing import List, Tuple, Union
+from typing import Tuple, Union
 import numpy as np
+from enum import Enum, auto
 
 from values import *
 import pygame as py
@@ -12,8 +13,20 @@ class Vec2:
         self.y: int = 1
 
 
+class ParticleType(Enum):
+    Particle = 0
+    Sand: int = auto()
+    Water: int = auto()
+    Fire: int = auto()
+    Wood: int = auto()
+    Smoke: int = auto()
+    Eraser: int = auto()
+
+
 class Particle:
     VELOCITY: int = 3
+    priority: Tuple[ParticleType, ...] = ()
+    id: ParticleType = ParticleType.Particle
 
     def __init__(self, y: int, x: int) -> None:
         self.lifetime: int = 0
@@ -23,31 +36,30 @@ class Particle:
         self.vel: Vec2 = Vec2()
         self.color: Tuple[int, int, int] = (0, 0, 0)
 
-    def update_frame(self, board: List[Union[None, 'Particle']]) -> None:
+    def update_frame(self, board: np.ndarray) -> None:
         pass
-
-    @classmethod
-    def paint(cls, board: List[Union[None, 'Particle']]) -> None:
-        pos_x, pos_y = py.mouse.get_pos()
-        pos_y //= SCALE
-        pos_x //= SCALE
-        
-        rand_x, rand_y = np.random.randint(-PAINT_RANGE, PAINT_RANGE+1, size=(2, PAINT_SCALE))
-
-        for x, y in zip(rand_x, rand_y):
-            if board[pos_y+y][pos_x+x] is None and 0 <= pos_y+y < len(board) and 0 <= pos_x+x < len(board[0]):
-                board[pos_y+y][pos_x+x] = cls(pos_y+y, pos_x+x)
 
     def draw(self, win: py.Surface) -> None:
         py.draw.rect(win, self.color, ((self.x*SCALE, self.y*SCALE), (SCALE, SCALE)), 0)
 
+    @classmethod
+    def is_valid_spot(cls, spot: Union[None, ParticleType]) -> bool:
+        if spot is None:
+            return True
+        if spot.id == cls.id:
+            return False
+        return spot.id not in cls.priority
+
 
 class Sand(Particle):
+    priority = (ParticleType.Wood,)
+    id = ParticleType.Sand
+
     def __init__(self, y: int, x: int) -> None:
         super(Sand, self).__init__(y, x)
         self.color = random.choice(COLORS["Sand"])
 
-    def update_frame(self, board: List[Union[None, 'Particle']]) -> None:
+    def update_frame(self, board: np.ndarray) -> None:
         for i in reversed(range(1, self.VELOCITY)):
             if self.y < len(board)-i and not isinstance(board[self.y+i][self.x], (Sand, Wood)):
                 board[self.y+i][self.x] = Sand(self.y+i, self.x)
@@ -68,11 +80,14 @@ class Sand(Particle):
 
 
 class Water(Particle):
+    priority = (ParticleType.Sand, ParticleType.Wood)
+    id = ParticleType.Water
+
     def __init__(self, y: int, x: int) -> None:
         super(Water, self).__init__(y, x)
         self.color = random.choice(COLORS["Water"])
 
-    def update_frame(self, board: List[Union[None, 'Particle']]) -> None:
+    def update_frame(self, board: np.ndarray) -> None:
         for i in reversed(range(1, self.VELOCITY)):
             if self.y < len(board)-i and not isinstance(board[self.y+i][self.x], (Sand, Wood, Water)):
                 board[self.y+i][self.x] = Water(self.y+i, self.x)
@@ -103,30 +118,25 @@ class Water(Particle):
 
 
 class Wood(Particle):
+    id = ParticleType.Wood
+
     def __init__(self, y: int, x: int) -> None:
         super(Wood, self).__init__(y, x)
         self.color = random.choice(COLORS["Wood"])
         self.flammable = True
         self.lifetime = 100
 
-    @classmethod
-    def paint(cls, board: List[Union[None, 'Particle']]) -> None:
-        pos_x, pos_y = py.mouse.get_pos()
-        pos_y //= SCALE
-        pos_x //= SCALE
-        for i in range(-PAINT_SCALE, PAINT_SCALE):
-            for j in range(-PAINT_SCALE, PAINT_SCALE):
-                if 0 <= pos_y+i < len(board) and 0 <= pos_x+j < len(board[0]):
-                    board[pos_y+i][pos_x+j] = cls(pos_y+i, pos_x+j)
-
 
 class Fire(Particle):
+    priority = (ParticleType.Sand, ParticleType.Wood)
+    id = ParticleType.Fire
+
     def __init__(self, y: int, x: int) -> None:
         super(Fire, self).__init__(y, x)
         self.color = random.choice(COLORS["Fire"])
         self.lifetime = random.randint(150, 220)
 
-    def update_frame(self, board: List[Union[None, 'Particle']]) -> None:
+    def update_frame(self, board: np.ndarray) -> None:
         if self.lifetime < 0:
             board[self.y][self.x] = Smoke(self.y, self.x)
             return
@@ -141,25 +151,18 @@ class Fire(Particle):
                         board[self.y+i][self.x+j] = Smoke(self.y+i, self.x+j, False)
         self.lifetime -= 1
 
-    @classmethod
-    def paint(cls, board: List[Union[None, 'Particle']]) -> None:
-        pos_x, pos_y = py.mouse.get_pos()
-        pos_y //= SCALE
-        pos_x //= SCALE
-        for i in range(-PAINT_SCALE, PAINT_SCALE):
-            for j in range(-PAINT_SCALE, PAINT_SCALE):
-                if 0 <= pos_y+i < len(board) and 0 <= pos_x+j < len(board[0]):
-                    board[pos_y+i][pos_x+j] = cls(pos_y+i, pos_x+j)
-
 
 class Smoke(Particle):
-    def __init__(self, y: int, x: int, update: bool=False):
+    priority = (ParticleType.Sand, ParticleType.Water, ParticleType.Wood)
+    id = ParticleType.Smoke
+
+    def __init__(self, y: int, x: int, update: bool = False):
         super(Smoke, self).__init__(y, x)
         self.color = random.choice(COLORS["Smoke"])
         self.lifetime = random.randint(10, 80)
         self.has_been_updated = update
 
-    def update_frame(self, board: List[Union[None, 'Particle']]) -> None:
+    def update_frame(self, board: np.ndarray) -> None:
         if self.has_been_updated:
             self.has_been_updated = False
             return
@@ -167,36 +170,37 @@ class Smoke(Particle):
             board[self.y][self.x] = None
             return
         self.lifetime -= 1
-        new_board_pos = None
+        new_x = None
+        new_y = None
         if self.y >= 1 and board[self.y-1][self.x] is None:
-            new_board_pos = [self.y-1, self.x]
+            new_y = self.y-1
+            new_x = self.x
 
         if random.randint(1, 2) % 2:
-            if self.y > 0:
-                if self.x > 0 and board[self.y-1][self.x-1] is None:
-                    new_board_pos = [self.y-1, self.x-1]
+            if self.y <= 0:
+                return
 
-                elif self.x < len(board[0])-1 and board[self.y-1][self.x+1] is None:
-                    new_board_pos = [self.y-1, self.x+1]
+            if self.x > 0 and board[self.y-1][self.x-1] is None:
+                new_y = self.y-1
+                new_x = self.x-1
+            elif self.x < len(board[0])-1 and board[self.y-1][self.x+1] is None:
+                new_y = self.y-1
+                new_x = self.x+1
 
-        if new_board_pos is not None:
-            board[new_board_pos[0]][new_board_pos[1]] = Smoke(*new_board_pos, True)
+        if new_y is not None and new_x is not None:
+            board[new_y][new_x] = Smoke(new_y, new_x, True)
             board[self.y][self.x] = None
 
 
 class Eraser(Particle):
-    def __init__(self):
-        super(Eraser, self).__init__(-1, -1)
+    id = ParticleType.Eraser
+
+    def __new__(cls, *args, **kwargs):
+        return None
 
     @classmethod
-    def paint(self, board: List[Union[None, 'Particle']]) -> None:
-        pos_x, pos_y = py.mouse.get_pos()
-        pos_y //= SCALE
-        pos_x //= SCALE
-        for i in range(-PAINT_SCALE, PAINT_SCALE):
-            for j in range(-PAINT_SCALE, PAINT_SCALE):
-                if 0 <= pos_y+i < len(board) and 0 <= pos_x+j < len(board[0]):
-                    board[pos_y+i][pos_x+j] = None
+    def is_valid_spot(cls, spot: Union[None, ParticleType]) -> bool:
+        return True
 
 
 COLORS_OBJ = {

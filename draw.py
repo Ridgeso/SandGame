@@ -18,6 +18,14 @@ from particle import (
 )
 
 
+class Board(np.ndarray):
+    def __new__(cls, x: int, y: int) -> 'Board':
+        return super().__new__(cls, (x, y), dtype=np.object)
+
+    def check_spot(self, x: int, y: int) -> bool:
+        return 0 <= x < self.shape[0] and 0 <= y < self.shape[1]
+
+
 class Brush:
     def __init__(self, pen: Type[Particle]) -> None:
         self.pen = pen
@@ -37,33 +45,48 @@ class Brush:
     
     @pen_size.setter
     def pen_size(self, value: int):
-        self._pen_size = value
+        if value > 0:
+            self._pen_size = value
+
+    def paint(self, board: Board) -> None:
+        pos_x, pos_y = py.mouse.get_pos()
+        pos_y //= SCALE
+        pos_x //= SCALE
+
+        # rand_x, rand_y = np.random.randint(-PAINT_RANGE, PAINT_RANGE + 1, size=(2, PAINT_SCALE))
+
+        # for x, y in zip(rand_x, rand_y):
+        for x in range(-self.pen_size, self.pen_size):
+            for y in range(-self.pen_size, self.pen_size):
+                if not board.check_spot(pos_y+y, pos_x+x):
+                    continue
+                if self.pen.is_valid_spot(board[pos_y + y][pos_x + x]):
+                    board[pos_y + y][pos_x + x] = self.pen(pos_y + y, pos_x + x)
 
 
 class Display:
-    
     def __init__(self, x: int, y: int) -> None:
         self.win_x = x
         self.win_y = y
 
         self.win = py.display.set_mode((self.win_x, self.win_y))
     
-        self.board = np.ndarray((BOARDY, BOARDX), dtype=np.object)
+        self.board = Board(BOARDY, BOARDX)
         self.brush = Brush(Sand)
 
     class MouseKey(IntEnum):
-            Left = 0
-            Scrol = auto()
-            Right = auto()
+        Left = 0
+        Scroll = auto()
+        Right = auto()
 
     def paint_particles(self) -> None:
         mouse_button_pressed = py.mouse.get_pressed(num_buttons=3)
         keys = py.key.get_pressed()
 
         if mouse_button_pressed[self.MouseKey.Left]:
-            self.brush.pen.paint(self.board)
+            self.brush.paint(self.board)
 
-        if mouse_button_pressed[self.MouseKey.Scrol]:
+        if mouse_button_pressed[self.MouseKey.Scroll]:
             self.brush.pen = Sand
         elif mouse_button_pressed[self.MouseKey.Right]:
             self.brush.pen = Water        
@@ -82,7 +105,7 @@ class Display:
             self.brush.pen_size += 1
 
     def draw_cursor(self) -> None:
-        py.draw.circle(self.win, (66, 66, 66), py.mouse.get_pos(), PAINT_SCALE*(SCALE+self.brush.pen_size), 2)
+        py.draw.circle(self.win, (66, 66, 66), py.mouse.get_pos(), SCALE*self.brush.pen_size, 2)
 
     def fill(self, color: Tuple[int, ...]) -> None:
         self.win.fill(color)
@@ -114,7 +137,7 @@ class Display:
                 try:
                     color = COLORS_OBJ[min(which_color, key=which_color.get)]
                     self.board[offset_y+i][offset_x+j] = color(offset_y+i, offset_x+j)
-                except Exception:
+                except IndexError:
                     print(min(COLORS_MEDIAN))
                     print(offset_y+i, offset_x+j)
                     return
