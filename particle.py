@@ -34,7 +34,7 @@ class Particle:
         self.x: int = x
         self.y: int = y
         self.vel: Vec2 = Vec2()
-        self.color: Tuple[int, int, int] = (0, 0, 0)
+        self.color: np.ndarray = np.array([0, 0, 0])
 
     def update_frame(self, board: np.ndarray) -> None:
         pass
@@ -202,6 +202,14 @@ class Eraser(Particle):
     def is_valid_spot(cls, spot: Union[None, ParticleType]) -> bool:
         return True
 
+
+COLORS = {
+    "Sand": np.array([[76, 70, 50], [74, 68, 48]]),
+    "Water": np.array([[28, 163, 236], [32, 169, 229]]),
+    "Wood": np.array([[35, 30, 24], [40, 40, 34]]),
+    "Fire": np.array([[206, 67, 32], [216, 75, 39]]),
+    "Smoke": np.array([[49, 49, 49], [41, 41, 41]])
+}
 
 COLORS_OBJ = {
     "Sand": Sand,

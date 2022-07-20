@@ -1,21 +1,8 @@
-from typing import Type, Tuple
-from enum import IntEnum, auto
-import numpy as np
+from typing import Type
+from enum import IntEnum
 import convert
 
-import pygame as py
-
-from values import *
-from particle import (
-    Particle,
-    Sand,
-    Water,
-    Wood,
-    Fire,
-    Smoke,
-    Eraser,
-    COLORS_OBJ
-)
+from particle import *
 
 
 class Board(np.ndarray):
@@ -129,15 +116,15 @@ class Display:
 
         for i, pixels in enumerate(data):
             for j, pixel in enumerate(pixels):
-                pixel = sum([pow(int(p), 2) for p in np.nditer(pixel)])
-        
-                for color in COLORS_MEDIAN:
-                    which_color[color] = abs(COLORS_MEDIAN[color] - pixel)
-        
+
+                for color in COLORS:
+                    pos_difference = COLORS[color] - pixel[:3]
+                    which_color[color] = min(map(lambda v: v[0]*v[0] + v[1]*v[1] + v[2]*v[2], pos_difference))
+
+                best_pixel = COLORS_OBJ[min(which_color, key=which_color.get)]
+                # TODO: What is wrong with this exception bloc
                 try:
-                    color = COLORS_OBJ[min(which_color, key=which_color.get)]
-                    self.board[offset_y+i][offset_x+j] = color(offset_y+i, offset_x+j)
+                    self.board[offset_y+i][offset_x+j] = best_pixel(offset_y+i, offset_x+j)
                 except IndexError:
-                    print(min(COLORS_MEDIAN))
                     print(offset_y+i, offset_x+j)
                     return

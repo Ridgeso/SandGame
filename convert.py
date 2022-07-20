@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Tuple, Union
 
 from values import *
 from numpy import array
@@ -6,7 +6,7 @@ from PIL import Image
 from tkinter import filedialog, Tk
 
 
-def convert_img() -> Tuple[array, int, int]:
+def convert_img() -> Union[Tuple[array, int, int], None]:
     Tk().withdraw()
     filename = filedialog.askopenfilename()
     if not filename:
