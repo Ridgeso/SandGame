@@ -2,7 +2,7 @@ from enum import IntEnum
 import numpy as np
 
 import pygame as py
-from cver import convert
+from src import convert
 from values import *
 from cver.cparticle import *
 
