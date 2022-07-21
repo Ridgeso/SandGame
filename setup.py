@@ -15,6 +15,6 @@ import numpy
 
 setup(
     packages=find_packages(),
-    ext_modules=cythonize(['cparticle.pyx', "cdraw.pyx"]),
+    ext_modules=cythonize(['cver/cparticle.pyx', 'cver/cdraw.pyx']),
     include_dirs=[numpy.get_include()]
 )
