@@ -170,8 +170,8 @@ class Smoke(Particle):
             board[self.y][self.x] = None
             return
         self.lifetime -= 1
-        new_x = None
         new_y = None
+        new_x = None
         if self.y >= 1 and board[self.y-1][self.x] is None:
             new_y = self.y-1
             new_x = self.x

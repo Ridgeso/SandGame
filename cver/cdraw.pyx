@@ -30,12 +30,12 @@ class Brush:
     
     @property
     def pen_size(self):
-        return self.pen_size
+        return self._pen_size
     
     @pen_size.setter
     def pen_size(self, value):
         if value > 0:
-            self.pen_size = value
+            self._pen_size = value
 
     def paint(self, board):
         pos_x, pos_y = py.mouse.get_pos()
@@ -56,7 +56,7 @@ class Display:
         self.win_x = x
         self.win_y = y
 
-        self.win = py.dispaly.set_mode((self.win_x, self.win_y))
+        self.win = py.display.set_mode((self.win_x, self.win_y))
 
         self.board = Board(BOARDY, BOARDX)
         self.brush = Brush(Sand)
@@ -74,17 +74,17 @@ class Display:
             self.brush.paint(self.board)
 
         if mouse_button_pressed[self.MouseKey.Scroll]:
-            current_brush = Sand
+            self.brush.pen = Sand
         elif mouse_button_pressed[self.MouseKey.Right]:
-            current_brush = Water
+            self.brush.pen = Water
         elif keys[py.K_q]:
-            current_brush = Wood
+            self.brush.pen = Wood
         elif keys[py.K_w]:
-            current_brush = Eraser
+            self.brush.pen = Eraser
         elif keys[py.K_e]:
-            current_brush = Fire
+            self.brush.pen = Fire
         elif keys[py.K_r]:
-            current_brush = Smoke
+            self.brush.pen = Smoke
         
         if keys[py.K_LEFTBRACKET]:
             self.brush.pen_size -= 1
@@ -92,14 +92,14 @@ class Display:
             self.brush.pen_size += 1
         
     def draw_cursor(self):
-        py.draw.cirlce(self.win, (66, 66, 66), py.mouse.get_pos(), SCALE*self.brush.pen_size, 2)
+        py.draw.circle(self.win, (66, 66, 66), py.mouse.get_pos(), SCALE*self.brush.pen_size, 2)
 
     def fill(self, color):
         self.win.fill(color)
 
     def update(self):
         for level in reversed(self.board):
-            for cell in level:
+            for cell in reversed(level):
                 if cell is not None:
                     cell.update_frame(self.board)
 
@@ -107,7 +107,7 @@ class Display:
         # cdef int i, j
         for i in reversed(range(BOARDY)):
             for j in range(BOARDX):
-                cell = board[i][j]
+                cell = self.board[i][j]
                 if cell is not None:
                     cell.draw(self.win)
 
@@ -116,22 +116,22 @@ class Display:
         # cdef np.ndarray data
         # cdef int offset_x, offset_y, i, j
         # cdef int pval, v
-        obj = ["Sand", "Water", "Wood", "Fire", "Smoke"]
+        # obj = ["Sand", "Water", "Wood", "Fire", "Smoke"]
+        which_color = {"Sand": 0, "Water": 0, "Wood": 0, "Fire": 0, "Smoke": 0}
 
         # cdef int minval, newmin, c, which
 
         data, offset_y, offset_x = convert.convert_img()
         for i, pixels in enumerate(data):
             for j, pixel in enumerate(pixels):
-                pval = 0
-                which = 0
-                for v in pixel:
-                    pval += v*v
-                minval = abs(COLORS_MEDIAN["Sand"] - pval)
-                for c in range(1, 5):
-                    newmin = abs(COLORS_MEDIAN[obj[c]] - pval)
-                    if newmin < minval:
-                        minval = newmin
-                        which=c
-                color = COLORS_OBJ[obj[which]]
-                board[offset_y+i][offset_x+j] = color(offset_y+i, offset_x+j)
+            
+                for color in COLORS:
+                    pos_difference = COLORS[color] - pixel[:3]
+                    which_color[color] = min(map(lambda v: v[0]*v[0] + v[1]*v[1] + v[2]*v[2], pos_difference))
+
+                best_pixel = COLORS_OBJ[min(which_color, key=which_color.get)]
+                try:
+                    self.board[offset_y+i][offset_x+j] = best_pixel(offset_y+i, offset_x+j)
+                except IndexError:
+                    print(offset_y+i, offset_x+j)
+                    return

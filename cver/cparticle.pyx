@@ -1,5 +1,6 @@
 from values import *
 from enum import Enum, auto
+import numpy as np
 
 import pygame as py
 import random
@@ -25,8 +26,8 @@ ctypedef enum ParticleType:
 
 
 cdef class Particle:
+    cdef priority
     # cdef ParticleType* priority
-    cdef int id
 
     cdef int VELOCITY
     cdef int lifetime, x, y
@@ -43,7 +44,10 @@ cdef class Particle:
         self.color = (0, 0, 0)
 
         self.priority = ()
-        self.id = ParticleType.ParticleT
+
+    @staticmethod
+    def id():
+        return ParticleType.ParticleT
 
     cpdef update_frame(self, board):
         pass
@@ -66,26 +70,29 @@ cdef class Sand(Particle):
         self.color = random.choice(COLORS["Sand"])
 
         self.priority = (ParticleType.WoodT,)
-        self.id = ParticleType.SandT
+
+    @staticmethod
+    def id():
+        return ParticleType.SandT
 
     cpdef update_frame(self, board):
         cdef int i
         for i in reversed(range(1, self.VELOCITY)):
             if self.y < len(board)-i and not isinstance(board[self.y+i][self.x], (Sand, Wood)):
                 board[self.y+i][self.x] = Sand(self.y+i, self.x)
-                board[self.y][self.x] = 0
+                board[self.y][self.x] = None
                 return
 
         for i in reversed(range(1, self.VELOCITY)):
             if self.y < len(board)-i:
                 if self.x >= i and not isinstance(board[self.y+i][self.x-i], (Sand, Wood)):
                     board[self.y+i][self.x-i] = Sand(self.y+i, self.x-i)
-                    board[self.y][self.x] = 0
+                    board[self.y][self.x] = None
                     return
 
                 elif self.x < len(board[0])-i and not isinstance(board[self.y+i][self.x+i], (Sand, Wood)):
                     board[self.y+i][self.x+i] = Sand(self.y+i, self.x+i)
-                    board[self.y][self.x] = 0
+                    board[self.y][self.x] = None
                     return
 
 
@@ -95,36 +102,39 @@ cdef class Water(Particle):
         self.color = random.choice(COLORS["Water"])
 
         self.priority = (ParticleType.SandT, ParticleType.WoodT)
-        self.id = ParticleType.WoodT
 
+    @staticmethod
+    def id():
+        return ParticleType.WaterT
+        
     cpdef update_frame(self, board):
         cdef int i
         for i in reversed(range(1, self.VELOCITY)):
             if self.y < len(board)-i and not isinstance(board[self.y+i][self.x], (Sand, Wood, Water)):
                 board[self.y+i][self.x] = Water(self.y+i, self.x)
-                board[self.y][self.x] = 0
+                board[self.y][self.x] = None
                 return
 
         for i in reversed(range(1, self.VELOCITY)):
             if self.y < len(board)-i:
                 if self.x >= i and not isinstance(board[self.y+i][self.x-i], (Sand, Wood, Water)):
                     board[self.y+i][self.x-i] = Water(self.y+i, self.x-i)
-                    board[self.y][self.x] = 0
+                    board[self.y][self.x] = None
                     return
 
                 elif self.x < len(board[0])-i and not isinstance(board[self.y+i][self.x+i], (Sand, Wood, Water)):
                     board[self.y+i][self.x+i] = Water(self.y+i, self.x+i)
-                    board[self.y][self.x] = 0
+                    board[self.y][self.x] = None
                     return
 
         for i in reversed(range(1, self.VELOCITY)):
             if self.x < len(board[0])-i and not isinstance(board[self.y][self.x+i], (Sand, Wood, Water)):
                 board[self.y][self.x+i] = Water(self.y, self.x+i)
-                board[self.y][self.x] = 0
+                board[self.y][self.x] = None
                 return
             elif self.x >= i and not isinstance(board[self.y][self.x-i], (Sand, Wood, Water)):
                 board[self.y][self.x-i] = Water(self.y, self.x-i)
-                board[self.y][self.x] = 0
+                board[self.y][self.x] = None
                 return
 
 
@@ -136,8 +146,10 @@ cdef class Wood(Particle):
         self.lifetime = 100
         
         self.priority = ()
-        self.id = ParticleType.WoodT
     
+    @staticmethod
+    def id():
+        return ParticleType.WoodT
 
 cdef class Fire(Particle):
     def __init__(self, int y, int x):
@@ -146,7 +158,10 @@ cdef class Fire(Particle):
         self.lifetime = random.randint(150, 220)
         
         self.priority = (ParticleType.SandT, ParticleType.WoodT)
-        self.id = ParticleType.FireT
+
+    @staticmethod
+    def id():
+        return ParticleType.FireT
 
     cpdef update_frame(self, board):
         if self.lifetime < 0:
@@ -173,37 +188,49 @@ cdef class Smoke(Particle):
         self.has_been_updated = update
 
         self.priority = (ParticleType.SandT, ParticleType.WaterT, ParticleType.WoodT)
-        self.id = ParticleType.SmokeT
+
+    @staticmethod
+    def id():
+        return ParticleType.SmokeT
 
     cpdef update_frame(self, board):
         if self.has_been_updated:
             self.has_been_updated = False
             return
         if self.lifetime < 0:
-            board[self.y][self.x] = 0
+            board[self.y][self.x] = None
             return
         self.lifetime -= 1
-        new_board_pos = None
-        if self.y >= 1 and isinstance(board[self.y-1][self.x], int):
-            new_board_pos = [self.y-1, self.x]
-
+        new_y = None
+        new_x = None
+        if self.y >= 1 and board[self.y-1][self.x] is None:
+            new_y = self.y-1
+            new_x = self.x
+        
         if random.randint(1, 2) % 2:
-            if self.y > 0:
-                if self.x > 0 and isinstance(board[self.y-1][self.x-1], int):
-                    new_board_pos = [self.y-1, self.x-1]
+            if self.y <= 0:
+                return
 
-                elif self.x < len(board[0])-1 and isinstance(board[self.y-1][self.x+1], int):
-                    new_board_pos = [self.y-1, self.x+1]
+            if self.x > 0 and board[self.y-1][self.x-1] is None:
+                new_y = self.y-1
+                new_x = self.x-1
+            elif self.x < len(board[0])-1 and board[self.y-1][self.x+1] is None:
+                new_y = self.y-1
+                new_x = self.x+1
 
-        if new_board_pos is not None:
-            board[new_board_pos[0]][new_board_pos[1]] = Smoke(*new_board_pos, True)
-            board[self.y][self.x] = 0
+        if new_y is not None and new_x is not None:
+            board[new_y][new_x] = Smoke(new_y, new_x, True)
+            board[self.y][self.x] = None
 
 
 class Eraser(Particle):
     
     def __new__(cls, *args, **kwargs):
         return None
+
+    @staticmethod
+    def id():
+        return ParticleType.EraserT
 
     @classmethod
     def is_valid_spot(cls, spot):
