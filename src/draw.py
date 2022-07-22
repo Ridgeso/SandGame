@@ -1,7 +1,7 @@
 from typing import Type, Tuple
 from enum import IntEnum
-from src import convert
 
+from src import convert
 from src.particle import *
 
 
@@ -9,8 +9,18 @@ class Board(np.ndarray):
     def __new__(cls, y: int, x: int) -> 'Board':
         return super().__new__(cls, (y, x), dtype=object)
 
-    def check_spot(self, y: int, x: int) -> bool:
+    def in_bounds(self, y: int, x: int) -> bool:
         return 0 <= y < self.shape[0] and 0 <= x < self.shape[1]
+
+    def swap(self, cell: Particle, y: int, x: int):
+        temp = self[cell.pos.y, cell.pos.x]
+        self[cell.pos.y, cell.pos.x] = self[y, x]
+        self[y, x] = temp
+
+        if self[cell.pos.y, cell.pos.x] is not None:
+            self[cell.pos.y, cell.pos.x].pos = cell.pos
+
+        self[y, x].pos = Vec(y, x)
 
 
 class Brush:
@@ -21,7 +31,7 @@ class Brush:
     @property
     def pen(self) -> Type[Particle]:
         return self._pen
-    
+
     @pen.setter
     def pen(self, value: Type[Particle]):
         self._pen = value
@@ -29,7 +39,7 @@ class Brush:
     @property
     def pen_size(self) -> int:
         return self._pen_size
-    
+
     @pen_size.setter
     def pen_size(self, value: int):
         if value > 0:
@@ -40,14 +50,13 @@ class Brush:
         pos_y //= SCALE
         pos_x //= SCALE
 
-        # rand_x, rand_y = np.random.randint(-PAINT_RANGE, PAINT_RANGE + 1, size=(2, PAINT_SCALE))
-
-        # for x, y in zip(rand_x, rand_y):
-        for x in range(-self.pen_size, self.pen_size):
-            for y in range(-self.pen_size, self.pen_size):
-                if not board.check_spot(pos_y+y, pos_x+x):
+        for y in range(-self.pen_size, self.pen_size):
+            offset = (self.pen_size**2 - y**2)**0.5
+            offset = round(offset)
+            for x in range(-offset, offset):
+                if not board.in_bounds(pos_y + y, pos_x + x):
                     continue
-                if self.pen.is_valid_spot(board[pos_y + y, pos_x + x]):
+                if self.pen.is_valid(board[pos_y + y, pos_x + x]):
                     board[pos_y + y, pos_x + x] = self.pen(pos_y + y, pos_x + x)
 
 
@@ -62,9 +71,11 @@ class Display:
         self.brush = Brush(Sand)
 
     class MouseKey(IntEnum):
-        Left = 0
-        Scroll = auto()
-        Right = auto()
+        Left: int = 0
+        Scroll: int = auto()
+        Right: int = auto()
+        ScrollUp: int = auto()
+        ScrollDown: int = auto()
 
     def paint_particles(self) -> None:
         mouse_button_pressed = py.mouse.get_pressed(num_buttons=3)
@@ -85,11 +96,9 @@ class Display:
             self.brush.pen = Fire
         elif keys[py.K_r]:
             self.brush.pen = Smoke
-        
-        if keys[py.K_LEFTBRACKET]:
-            self.brush.pen_size -= 1
-        elif keys[py.K_RIGHTBRACKET]:
-            self.brush.pen_size += 1
+
+    def resize_cursor(self, value: int):
+        self.brush.pen_size += value
 
     def draw_cursor(self) -> None:
         py.draw.circle(self.win, (66, 66, 66), py.mouse.get_pos(), SCALE*self.brush.pen_size, 2)
@@ -101,7 +110,7 @@ class Display:
         for level in reversed(self.board):
             for cell in level:
                 if cell is not None:
-                    cell.update_frame(self.board)
+                    cell.on_update(self.board)
 
     def redraw(self) -> None:
         for level in self.board:
@@ -113,6 +122,7 @@ class Display:
         data, offset_y, offset_x = convert.convert_img()
         
         which_color = {"Sand": 0, "Water": 0, "Wood": 0, "Fire": 0, "Smoke": 0}
+        color_obj = {"Sand": Sand, "Water": Water, "Wood": Wood, "Fire": Fire, "Smoke": Smoke}
 
         for i, pixels in enumerate(data):
             for j, pixel in enumerate(pixels):
@@ -121,7 +131,7 @@ class Display:
                     pos_difference = COLORS[color] - pixel[:3]
                     which_color[color] = min(map(lambda v: v[0]*v[0] + v[1]*v[1] + v[2]*v[2], pos_difference))
 
-                best_pixel = COLORS_OBJ[min(which_color, key=which_color.get)]
+                best_pixel = color_obj[min(which_color, key=which_color.get)]
                 # TODO: What is wrong with this exception bloc
                 try:
                     self.board[offset_y+i][offset_x+j] = best_pixel(offset_y+i, offset_x+j)

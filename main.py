@@ -22,11 +22,11 @@ class SandSim:
             self.clock.tick(FPS)
 
             self.display.fill((0, 0, 0))
-            self.display.paint_particles()
-            
+
             if self.sim:
                 self.display.update()
 
+            self.display.paint_particles()
             self.display.redraw()
             self.display.draw_cursor()
             
@@ -41,7 +41,7 @@ class SandSim:
             if event.type == py.QUIT:
                 self.is_running = False
                 py.quit()
-            if event.type == py.KEYDOWN:
+            elif event.type == py.KEYDOWN:
                 if event.key == py.K_ESCAPE:
                     self.is_running = False
                     py.quit()
@@ -49,6 +49,8 @@ class SandSim:
                     self.sim = False if self.sim else True
                 if event.key == py.K_n:
                     self.display.map_colors()
+            elif event.type == py.MOUSEWHEEL:
+                self.display.resize_cursor(event.y)
 
 
 def main() -> None:
