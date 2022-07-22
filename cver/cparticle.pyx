@@ -1,19 +1,10 @@
 from values import *
-from enum import Enum, auto
+cimport numpy as np
 import numpy as np
 
 import pygame as py
 import random
 
-
-# cdef class ParticleType(Enum):
-#     cdef int Particle = 0
-#     cdef int Sand = auto()
-#     cdef int Water = auto()
-#     cdef int Fire = auto()
-#     cdef int Wood = auto()
-#     cdef int Smoke = auto()
-#     cdef int Eraser = auto()
 
 ctypedef enum ParticleType:
     ParticleT = 0,
@@ -26,9 +17,6 @@ ctypedef enum ParticleType:
 
 
 cdef class Particle:
-    cdef priority
-    # cdef ParticleType* priority
-
     cdef int VELOCITY
     cdef int lifetime, x, y
     cdef bint flammable
@@ -37,22 +25,24 @@ cdef class Particle:
 
     def __init__(self, int y, int x):
         self.VELOCITY = 3
-        self.lifetime
+        self.lifetime = 0
         self.flammable = False
         self.x = x
         self.y = y
         self.color = (0, 0, 0)
 
-        self.priority = ()
-
     @staticmethod
     def id():
         return ParticleType.ParticleT
+    
+    @staticmethod
+    def priority(int id):
+        return True
 
-    cpdef update_frame(self, board):
+    cpdef void update_frame(self, np.ndarray board):
         pass
     
-    def draw(self, win):
+    cpdef void draw(self, win):
         py.draw.rect(win, self.color, ((self.x*SCALE, self.y*SCALE), (SCALE, SCALE)), 0)
 
     @classmethod
@@ -61,7 +51,7 @@ cdef class Particle:
             return True
         if spot.id == cls.id:
             return False
-        return spot.id not in cls.priority
+        return not cls.priority(spot.id())
 
 
 cdef class Sand(Particle):
@@ -69,13 +59,15 @@ cdef class Sand(Particle):
         super(Sand, self).__init__(y, x)
         self.color = random.choice(COLORS["Sand"])
 
-        self.priority = (ParticleType.WoodT,)
-
     @staticmethod
     def id():
         return ParticleType.SandT
 
-    cpdef update_frame(self, board):
+    @staticmethod
+    def priority(int id):
+        return id == ParticleType.WoodT
+    
+    cpdef void update_frame(self, np.ndarray board):
         cdef int i
         for i in reversed(range(1, self.VELOCITY)):
             if self.y < len(board)-i and not isinstance(board[self.y+i][self.x], (Sand, Wood)):
@@ -101,13 +93,15 @@ cdef class Water(Particle):
         super(Water, self).__init__(y, x)
         self.color = random.choice(COLORS["Water"])
 
-        self.priority = (ParticleType.SandT, ParticleType.WoodT)
-
     @staticmethod
     def id():
         return ParticleType.WaterT
         
-    cpdef update_frame(self, board):
+    @staticmethod
+    def priority(int id):
+        return id == ParticleType.SandT or id == ParticleType.WoodT
+        
+    cpdef void update_frame(self, np.ndarray board):
         cdef int i
         for i in reversed(range(1, self.VELOCITY)):
             if self.y < len(board)-i and not isinstance(board[self.y+i][self.x], (Sand, Wood, Water)):
@@ -144,12 +138,15 @@ cdef class Wood(Particle):
         self.color = random.choice(COLORS["Wood"])
         self.flammable = True
         self.lifetime = 100
-        
-        self.priority = ()
-    
+            
     @staticmethod
     def id():
         return ParticleType.WoodT
+    
+    @staticmethod
+    def priority(int id):
+        return True
+
 
 cdef class Fire(Particle):
     def __init__(self, int y, int x):
@@ -157,13 +154,15 @@ cdef class Fire(Particle):
         self.color = random.choice(COLORS["Fire"])
         self.lifetime = random.randint(150, 220)
         
-        self.priority = (ParticleType.SandT, ParticleType.WoodT)
-
     @staticmethod
     def id():
         return ParticleType.FireT
 
-    cpdef update_frame(self, board):
+    @staticmethod
+    def priority(ParticleType id):
+        return id == ParticleType.SandT or id == ParticleType.WoodT
+
+    cpdef void update_frame(self, np.ndarray board):
         if self.lifetime < 0:
             board[self.y][self.x] = Smoke(self.y, self.x)
             return
@@ -187,13 +186,15 @@ cdef class Smoke(Particle):
         self.lifetime = random.randint(10, 80)
         self.has_been_updated = update
 
-        self.priority = (ParticleType.SandT, ParticleType.WaterT, ParticleType.WoodT)
-
     @staticmethod
     def id():
         return ParticleType.SmokeT
+        
+    @staticmethod
+    def priority(ParticleType id):
+        return id == ParticleType.SandT or  id == ParticleType.WaterT or  id == ParticleType.WoodT
 
-    cpdef update_frame(self, board):
+    cpdef void update_frame(self, np.ndarray board):
         if self.has_been_updated:
             self.has_been_updated = False
             return
