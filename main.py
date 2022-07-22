@@ -1,10 +1,10 @@
 import pygame as py
 from values import *
-# from src.draw import (
-#     Display,
-#     WX, WY, FPS
-# )
-from cver.cdraw import Display
+from src.draw import (
+    Display,
+    WX, WY, FPS
+)
+# from cver.cdraw import Display
 
 
 class SandSim:

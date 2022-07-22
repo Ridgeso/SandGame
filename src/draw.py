@@ -1,4 +1,4 @@
-from typing import Type
+from typing import Type, Tuple
 from enum import IntEnum
 from src import convert
 
@@ -6,17 +6,17 @@ from src.particle import *
 
 
 class Board(np.ndarray):
-    def __new__(cls, x: int, y: int) -> 'Board':
-        return super().__new__(cls, (x, y), dtype=np.object)
+    def __new__(cls, y: int, x: int) -> 'Board':
+        return super().__new__(cls, (y, x), dtype=object)
 
-    def check_spot(self, x: int, y: int) -> bool:
-        return 0 <= x < self.shape[0] and 0 <= y < self.shape[1]
+    def check_spot(self, y: int, x: int) -> bool:
+        return 0 <= y < self.shape[0] and 0 <= x < self.shape[1]
 
 
 class Brush:
     def __init__(self, pen: Type[Particle]) -> None:
-        self.pen = pen
-        self.pen_size = PAINT_SCALE
+        self._pen: Type[Particle] = pen
+        self._pen_size: int = PAINT_SCALE
 
     @property
     def pen(self) -> Type[Particle]:
@@ -47,14 +47,14 @@ class Brush:
             for y in range(-self.pen_size, self.pen_size):
                 if not board.check_spot(pos_y+y, pos_x+x):
                     continue
-                if self.pen.is_valid_spot(board[pos_y + y][pos_x + x]):
-                    board[pos_y + y][pos_x + x] = self.pen(pos_y + y, pos_x + x)
+                if self.pen.is_valid_spot(board[pos_y + y, pos_x + x]):
+                    board[pos_y + y, pos_x + x] = self.pen(pos_y + y, pos_x + x)
 
 
 class Display:
-    def __init__(self, x: int, y: int) -> None:
-        self.win_x = x
-        self.win_y = y
+    def __init__(self, y: int, x: int) -> None:
+        self.win_x = y
+        self.win_y = x
 
         self.win = py.display.set_mode((self.win_x, self.win_y))
     

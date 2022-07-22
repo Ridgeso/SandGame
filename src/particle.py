@@ -1,4 +1,4 @@
-from typing import Tuple, Union
+from typing import Set, Union
 import numpy as np
 from enum import Enum, auto
 
@@ -7,10 +7,48 @@ import pygame as py
 import random
 
 
-class Vec2:
-    def __init__(self) -> None:
-        self.x: int = 1
-        self.y: int = 1
+class Vec:
+    MaxVel: int = 5
+
+    def __init__(self, y: int = 0, x: int = 0) -> None:
+        self._y: int = y
+        self._x: int = x
+
+    def is_zero(self) -> bool:
+        return self._y == 0 and self._x == 0
+
+    @property
+    def y(self) -> int:
+        return self._y
+
+    @y.setter
+    def y(self, value: int) -> None:
+        if value < self.MaxVel:
+            self._y = value
+
+    @property
+    def x(self) -> int:
+        return self._x
+
+    @x.setter
+    def x(self, value: int) -> None:
+        if value < self.MaxVel:
+            self._x = value
+
+    def __add__(self, other: 'Vec') -> 'Vec':
+        return Vec(self._y+other._y, self._x+other._x)
+
+    def __sub__(self, other: 'Vec') -> 'Vec':
+        return Vec(self._y-other._y, self._x-other._x)
+
+    def __repr__(self) -> str:
+        return f'Vec(y:{self._y},x:{self._x})'
+
+    def __eq__(self, other: 'Vec') -> bool:
+        return self._y == other._y and self._x == other._x
+
+    def __ne__(self, other: 'Vec') -> bool:
+        return not self == other
 
 
 class ParticleType(Enum):
@@ -24,102 +62,135 @@ class ParticleType(Enum):
 
 
 class Particle:
-    VELOCITY: int = 3
-    priority: Tuple[ParticleType, ...] = ()
-    id: ParticleType = ParticleType.Particle
+    IterationCount: int = 3
+    priority: Set[ParticleType] = set()
 
     def __init__(self, y: int, x: int) -> None:
         self.lifetime: int = 0
         self.flammable: bool = False
-        self.x: int = x
-        self.y: int = y
-        self.vel: Vec2 = Vec2()
+        self._pos: Vec = Vec(y, x)
+        self.vel: Vec = Vec()
         self.color: np.ndarray = np.array([0, 0, 0])
 
-    def update_frame(self, board: np.ndarray) -> None:
+    @property
+    def pos(self) -> Vec:
+        return self._pos
+
+    @pos.setter
+    def pos(self, pos: Vec) -> None:
+        self._pos = pos
+
+    def update_frame(self, board) -> None:
         pass
 
     def draw(self, win: py.Surface) -> None:
-        py.draw.rect(win, self.color, ((self.x*SCALE, self.y*SCALE), (SCALE, SCALE)), 0)
+        py.draw.rect(win, self.color, ((self.pos.x*SCALE, self.pos.y*SCALE), (SCALE, SCALE)), 0)
+
+    @classmethod
+    def id(cls):
+        return getattr(ParticleType, cls.__name__)
 
     @classmethod
     def is_valid_spot(cls, spot: Union[None, ParticleType]) -> bool:
         if spot is None:
             return True
-        if spot.id == cls.id:
+        elif spot.id() == cls.id():
             return False
-        return spot.id not in cls.priority
+        else:
+            return spot.id() not in cls.priority
 
 
 class Sand(Particle):
-    priority = (ParticleType.Wood,)
-    id = ParticleType.Sand
+    priority = {ParticleType.Wood}
 
     def __init__(self, y: int, x: int) -> None:
         super(Sand, self).__init__(y, x)
         self.color = random.choice(COLORS["Sand"])
 
-    def update_frame(self, board: np.ndarray) -> None:
-        for i in reversed(range(1, self.VELOCITY)):
-            if self.y < len(board)-i and not isinstance(board[self.y+i][self.x], (Sand, Wood)):
-                board[self.y+i][self.x] = Sand(self.y+i, self.x)
-                board[self.y][self.x] = None
-                return
+    def update_frame(self, board) -> None:
+        # TODO: Refactor Part I
+        if self.vel.is_zero():
+            self.vel.y = 1
+            return
 
-        for i in reversed(range(1, self.VELOCITY)):
-            if self.y < len(board)-i:
-                if self.x >= i and not isinstance(board[self.y+i][self.x-i], (Sand, Wood)):
-                    board[self.y+i][self.x-i] = Sand(self.y+i, self.x-i)
-                    board[self.y][self.x] = None
-                    return
+        prev_pos = self.pos
+        for i in range(self.IterationCount):
+            nex_pos = self.pos + self.vel
+            if not board.check_spot(nex_pos.y, nex_pos.x):
+                break
+            if not self.is_valid_spot(board[nex_pos.y, nex_pos.x]):
+                self.vel.y = 0
+                break
+            prev_pos = nex_pos
+            self.vel.y += 1
 
-                elif self.x < len(board[0])-i and not isinstance(board[self.y+i][self.x+i], (Sand, Wood)):
-                    board[self.y+i][self.x+i] = Sand(self.y+i, self.x+i)
-                    board[self.y][self.x] = None
-                    return
+        if prev_pos != self.pos:
+            temp = board[self.pos.y, self.pos.x]
+            board[self.pos.y, self.pos.x] = board[prev_pos.y, prev_pos.x]
+            board[prev_pos.y, prev_pos.x] = temp
+            self.pos = prev_pos
+
+        # for i in reversed(range(1, self.MAX_VELOCITY)):
+        #     if self.pos.y+i >= board.shape[0]:
+        #         continue
+        #     move = board[self.pos.y+i][self.pos.x].id() == self.id() or board[self.pos.y+i][self.pos.x].id() in self.priority
+        #     if board[self.pos.y+i][self.pos.x].id() in self.priority:
+        #         temp = board[self.pos.y+i, self.pos.x]
+        #         board[self.pos.y+i, self.pos.x] = Sand(self.pos.y+i, self.pos.x)
+        #         board[self.pos.y, self.pos.x] = temp
+        #         return
+        #
+        # for i in reversed(range(1, self.MAX_VELOCITY)):
+        #     if self.pos.y < len(board)-i:
+        #         if self.pos.x >= i and not isinstance(board[self.pos.y+i][self.pos.x-i], (Sand, Wood)):
+        #             board[self.pos.y+i, self.pos.x-i] = Sand(self.pos.y+i, self.pos.x-i)
+        #             board[self.pos.y, self.pos.x] = None
+        #             return
+        #
+        #         elif self.pos.x < len(board[0])-i and not isinstance(board[self.pos.y+i][self.pos.x+i], (Sand, Wood)):
+        #             board[self.pos.y+i, self.pos.x+i] = Sand(self.pos.y+i, self.pos.x+i)
+        #             board[self.pos.y, self.pos.x] = None
+        #             return
 
 
 class Water(Particle):
-    priority = (ParticleType.Sand, ParticleType.Wood)
-    id = ParticleType.Water
+    priority = {ParticleType.Sand, ParticleType.Wood}
 
     def __init__(self, y: int, x: int) -> None:
         super(Water, self).__init__(y, x)
         self.color = random.choice(COLORS["Water"])
 
-    def update_frame(self, board: np.ndarray) -> None:
-        for i in reversed(range(1, self.VELOCITY)):
-            if self.y < len(board)-i and not isinstance(board[self.y+i][self.x], (Sand, Wood, Water)):
-                board[self.y+i][self.x] = Water(self.y+i, self.x)
-                board[self.y][self.x] = None
+    def update_frame(self, board) -> None:
+        for i in reversed(range(1, self.IterationCount)):
+            if self.pos.y < len(board)-i and not isinstance(board[self.pos.y+i, self.pos.x], (Sand, Wood, Water)):
+                board[self.pos.y+i, self.pos.x] = Water(self.pos.y+i, self.pos.x)
+                board[self.pos.y, self.pos.x] = None
                 return
 
-        for i in reversed(range(1, self.VELOCITY)):
-            if self.y < len(board)-i:
-                if self.x >= i and not isinstance(board[self.y+i][self.x-i], (Sand, Wood, Water)):
-                    board[self.y+i][self.x-i] = Water(self.y+i, self.x-i)
-                    board[self.y][self.x] = None
+        for i in reversed(range(1, self.IterationCount)):
+            if self.pos.y < len(board)-i:
+                if self.pos.x >= i and not isinstance(board[self.pos.y+i, self.pos.x-i], (Sand, Wood, Water)):
+                    board[self.pos.y+i, self.pos.x-i] = Water(self.pos.y+i, self.pos.x-i)
+                    board[self.pos.y, self.pos.x] = None
                     return
 
-                elif self.x < len(board[0])-i and not isinstance(board[self.y+i][self.x+i], (Sand, Wood, Water)):
-                    board[self.y+i][self.x+i] = Water(self.y+i, self.x+i)
-                    board[self.y][self.x] = None
+                elif self.pos.x < len(board[0])-i and not isinstance(board[self.pos.y+i, self.pos.x+i], (Sand, Wood, Water)):
+                    board[self.pos.y+i, self.pos.x+i] = Water(self.pos.y+i, self.pos.x+i)
+                    board[self.pos.y, self.pos.x] = None
                     return
 
-        for i in reversed(range(1, self.VELOCITY)):
-            if self.x < len(board[0])-i and not isinstance(board[self.y][self.x+i], (Sand, Wood, Water)):
-                board[self.y][self.x+i] = Water(self.y, self.x+i)
-                board[self.y][self.x] = None
+        for i in reversed(range(1, self.IterationCount)):
+            if self.pos.x < len(board[0])-i and not isinstance(board[self.pos.y, self.pos.x+i], (Sand, Wood, Water)):
+                board[self.pos.y, self.pos.x+i] = Water(self.pos.y, self.pos.x+i)
+                board[self.pos.y, self.pos.x] = None
                 return
-            elif self.x >= i and not isinstance(board[self.y][self.x-i], (Sand, Wood, Water)):
-                board[self.y][self.x-i] = Water(self.y, self.x-i)
-                board[self.y][self.x] = None
+            elif self.pos.x >= i and not isinstance(board[self.pos.y, self.pos.x-i], (Sand, Wood, Water)):
+                board[self.pos.y, self.pos.x-i] = Water(self.pos.y, self.pos.x-i)
+                board[self.pos.y, self.pos.x] = None
                 return
 
 
 class Wood(Particle):
-    id = ParticleType.Wood
-
     def __init__(self, y: int, x: int) -> None:
         super(Wood, self).__init__(y, x)
         self.color = random.choice(COLORS["Wood"])
@@ -128,33 +199,31 @@ class Wood(Particle):
 
 
 class Fire(Particle):
-    priority = (ParticleType.Sand, ParticleType.Wood)
-    id = ParticleType.Fire
+    priority = {ParticleType.Sand, ParticleType.Wood}
 
     def __init__(self, y: int, x: int) -> None:
         super(Fire, self).__init__(y, x)
         self.color = random.choice(COLORS["Fire"])
         self.lifetime = random.randint(150, 220)
 
-    def update_frame(self, board: np.ndarray) -> None:
+    def update_frame(self, board) -> None:
         if self.lifetime < 0:
-            board[self.y][self.x] = Smoke(self.y, self.x)
+            board[self.pos.y, self.pos.x] = Smoke(self.pos.y, self.pos.x)
             return
         for i in range(-1, 2):
             for j in range(-1, 2):
                 if i == 0 and j == 0:
                     continue
-                if 0 < self.y+i < len(board)-1 and 0 < self.x+j < len(board[0])-1:
-                    if isinstance(board[self.y+i][self.x+j], Wood) and self.lifetime < 140:
-                        board[self.y+i][self.x+j] = Fire(self.y+i, self.x+j)
-                    elif isinstance(board[self.y+i][self.x+j], int) and not random.randint(0, 31):
-                        board[self.y+i][self.x+j] = Smoke(self.y+i, self.x+j, False)
+                if 0 < self.pos.y+i < len(board)-1 and 0 < self.pos.x+j < len(board[0])-1:
+                    if isinstance(board[self.pos.y+i, self.pos.x+j], Wood) and self.lifetime < 140:
+                        board[self.pos.y+i, self.pos.x+j] = Fire(self.pos.y+i, self.pos.x+j)
+                    elif isinstance(board[self.pos.y+i, self.pos.x+j], int) and not random.randint(0, 31):
+                        board[self.pos.y+i, self.pos.x+j] = Smoke(self.pos.y+i, self.pos.x+j, False)
         self.lifetime -= 1
 
 
 class Smoke(Particle):
-    priority = (ParticleType.Sand, ParticleType.Water, ParticleType.Wood)
-    id = ParticleType.Smoke
+    priority = {ParticleType.Sand, ParticleType.Water, ParticleType.Wood}
 
     def __init__(self, y: int, x: int, update: bool = False):
         super(Smoke, self).__init__(y, x)
@@ -162,39 +231,37 @@ class Smoke(Particle):
         self.lifetime = random.randint(10, 80)
         self.has_been_updated = update
 
-    def update_frame(self, board: np.ndarray) -> None:
+    def update_frame(self, board) -> None:
         if self.has_been_updated:
             self.has_been_updated = False
             return
         if self.lifetime < 0:
-            board[self.y][self.x] = None
+            board[self.pos.y, self.pos.x] = None
             return
         self.lifetime -= 1
         new_x = None
         new_y = None
-        if self.y >= 1 and board[self.y-1][self.x] is None:
-            new_y = self.y-1
-            new_x = self.x
+        if self.pos.y >= 1 and board[self.pos.y-1, self.pos.x] is None:
+            new_y = self.pos.y-1
+            new_x = self.pos.x
 
         if random.randint(1, 2) % 2:
-            if self.y <= 0:
+            if self.pos.y <= 0:
                 return
 
-            if self.x > 0 and board[self.y-1][self.x-1] is None:
-                new_y = self.y-1
-                new_x = self.x-1
-            elif self.x < len(board[0])-1 and board[self.y-1][self.x+1] is None:
-                new_y = self.y-1
-                new_x = self.x+1
+            if self.pos.x > 0 and board[self.pos.y-1, self.pos.x-1] is None:
+                new_y = self.pos.y-1
+                new_x = self.pos.x-1
+            elif self.pos.x < len(board[0])-1 and board[self.pos.y-1, self.pos.x+1] is None:
+                new_y = self.pos.y-1
+                new_x = self.pos.x+1
 
         if new_y is not None and new_x is not None:
             board[new_y][new_x] = Smoke(new_y, new_x, True)
-            board[self.y][self.x] = None
+            board[self.pos.y, self.pos.x] = None
 
 
 class Eraser(Particle):
-    id = ParticleType.Eraser
-
     def __new__(cls, *args, **kwargs):
         return None
 
