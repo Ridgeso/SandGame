@@ -27,6 +27,7 @@ class Brush:
     def __init__(self, pen: Type[Particle]) -> None:
         self._pen: Type[Particle] = pen
         self._pen_size: int = PAINT_SCALE
+        self.last_mouse_position: Union[Vec, None] = Vec()
 
     @property
     def pen(self) -> Type[Particle]:
@@ -46,18 +47,25 @@ class Brush:
             self._pen_size = value
 
     def paint(self, board: Board) -> None:
-        pos_x, pos_y = py.mouse.get_pos()
-        pos_y //= SCALE
-        pos_x //= SCALE
+        pos = Vec(*py.mouse.get_pos())
+        if self.last_mouse_position is None:
+            self.last_mouse_position = Vec(pos.y, pos.x)
+        pos.y //= SCALE
+        pos.x //= SCALE
 
+        slope = (pos - self.last_mouse_position)
+        slope = slope.y / slope.x
+        # TODO: fix taring brush effect
         for y in range(-self.pen_size, self.pen_size):
             offset = (self.pen_size**2 - y**2)**0.5
             offset = round(offset)
             for x in range(-offset, offset):
-                if not board.in_bounds(pos_y + y, pos_x + x):
+                if not board.in_bounds(pos.y + y, pos.x + x):
                     continue
-                if self.pen.is_valid(board[pos_y + y, pos_x + x]):
-                    board[pos_y + y, pos_x + x] = self.pen(pos_y + y, pos_x + x)
+                if self.pen.is_valid(board[pos.y + y, pos.x + x]):
+                    board[pos.y + y, pos.x + x] = self.pen(pos.y + y, pos.x + x)
+
+        self.last_mouse_position = pos
 
 
 class Display:
@@ -83,6 +91,8 @@ class Display:
 
         if mouse_button_pressed[self.MouseKey.Left]:
             self.brush.paint(self.board)
+        else:
+            self.brush.last_mouse_position = None
 
         if mouse_button_pressed[self.MouseKey.Scroll]:
             self.brush.pen = Sand

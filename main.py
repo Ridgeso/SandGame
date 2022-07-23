@@ -14,7 +14,7 @@ class SandSim:
         self.display = Display(WX, WY)
         self.clock = py.time.Clock()
 
-        self.sim = False
+        self.sim = True
         self.is_running = True
     
     def run(self) -> None:
