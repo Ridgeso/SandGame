@@ -2,7 +2,7 @@ from typing import Set, Union
 import numpy as np
 from enum import Enum, auto
 
-from src.vec import Vec
+from src.vec import Vec, interpolate_pos
 from values import *
 import pygame as py
 import random
@@ -54,7 +54,7 @@ class Particle:
         else:
             self.is_falling = False
 
-    def draw(self, win: py.Surface) -> None:
+    def draw_and_reset(self, win: py.Surface) -> None:
         py.draw.rect(win, self.color, ((self.pos.x*SCALE, self.pos.y*SCALE), (SCALE, SCALE)), 0)
         self.been_updated = False
 
@@ -63,7 +63,7 @@ class Particle:
         return getattr(ParticleType, cls.__name__)
 
     @classmethod
-    def is_valid(cls, spot: Union[None, 'Particle']) -> bool:
+    def is_valid(cls, spot: Union['Particle', None]) -> bool:
         if spot is None:
             return True
         elif spot.id() == cls.id():
@@ -114,26 +114,27 @@ class Water(Particle):
         self.color = random.choice(COLORS["Water"])
 
     def _step(self, board, move: Vec) -> bool:
+        d = -1 if random.randint(0, 1) else 1
         if board.in_bounds(move.y + 1, move.x) and self.is_valid(board[move.y + 1, move.x]):
             move.y += 1
-        elif board.in_bounds(move.y + 1, move.x + 1) and self.is_valid(board[move.y + 1, move.x + 1]):
+        elif board.in_bounds(move.y + 1, move.x + d) and self.is_valid(board[move.y + 1, move.x + d]):
             move.y += 1
-            move.x += 1
-        elif board.in_bounds(move.y + 1, move.x - 1) and self.is_valid(board[move.y + 1, move.x - 1]):
+            move.x += d
+        elif board.in_bounds(move.y + 1, move.x - d) and self.is_valid(board[move.y + 1, move.x - d]):
             move.y += 1
-            move.x -= 1
-        elif board.in_bounds(move.y, move.x - 1) and self.is_valid(board[move.y, move.x - 1]):
-            move.x -= 1
-        elif board.in_bounds(move.y, move.x + 1) and self.is_valid(board[move.y, move.x + 1]):
-            move.x += 1
+            move.x -= d
+        elif board.in_bounds(move.y, move.x - d) and self.is_valid(board[move.y, move.x - d]):
+            move.x -= d
+        elif board.in_bounds(move.y, move.x + d) and self.is_valid(board[move.y, move.x + d]):
+            move.x += d
         else:
             return False
 
-        if board.in_bounds(self.pos.y, self.pos.x-1):
+        if board.in_bounds(self.pos.y, self.pos.x - 1):
             left = board[self.pos.y, self.pos.x - 1]
             if left is not None and ParticleType.Sand == left.id():
                 left.is_falling = True
-        if board.in_bounds(self.pos.y, self.pos.x+1):
+        if board.in_bounds(self.pos.y, self.pos.x + 1):
             right = board[self.pos.y, self.pos.x + 1]
             if right is not None and ParticleType.Sand == right.id():
                 right.is_falling = True
@@ -248,7 +249,7 @@ class Eraser(Particle):
         return None
 
     @classmethod
-    def is_valid(cls, spot: Union[None, ParticleType]) -> bool:
+    def is_valid(cls, spot: Union[ParticleType, None]) -> bool:
         return True
 
 

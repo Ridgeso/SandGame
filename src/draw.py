@@ -27,6 +27,7 @@ class Brush:
     def __init__(self, pen: Type[Particle]) -> None:
         self._pen: Type[Particle] = pen
         self._pen_size: int = PAINT_SCALE
+        self.PenDeference: int = self._pen_size
         self.last_mouse_position: Union[Vec, None] = Vec()
 
     @property
@@ -45,26 +46,41 @@ class Brush:
     def pen_size(self, value: int):
         if value > 0:
             self._pen_size = value
+            self.PenDeference = value
+
+    def paint_point(self, board: Board, point: Vec) -> None:
+        if not board.in_bounds(point.y, point.x):
+            return
+        if self.pen.is_valid(board[point.y, point.x]):
+            board[point.y, point.x] = self.pen(point.y, point.x)
+
+    def paint_from_to(self, board: Board, start: Vec, end: Vec, slope: Union[Vec, None] = None) -> None:
+        for pos in interpolate_pos(start, end, slope):
+            self.paint_point(board, pos)
 
     def paint(self, board: Board) -> None:
         pos = Vec(*py.mouse.get_pos())
-        if self.last_mouse_position is None:
-            self.last_mouse_position = Vec(pos.y, pos.x)
+        pos.y, pos.x = pos.x, pos.y
+
         pos.y //= SCALE
         pos.x //= SCALE
 
-        slope = (pos - self.last_mouse_position)
-        slope = slope.y / slope.x
-        # TODO: fix taring brush effect
+        if self.last_mouse_position is None:
+            self.last_mouse_position = Vec(pos.y, pos.x)
+        slope = pos - self.last_mouse_position
+        length = pow(pow(slope.y, 2) + pow(slope.x, 2), 0.5)
+        if length != 0:
+            slope.y /= length
+            slope.x /= length
+
         for y in range(-self.pen_size, self.pen_size):
-            offset = (self.pen_size**2 - y**2)**0.5
+            offset = pow((pow(self.pen_size, 2) - pow(y, 2)), 0.5)
             offset = round(offset)
             for x in range(-offset, offset):
-                if not board.in_bounds(pos.y + y, pos.x + x):
-                    continue
-                if self.pen.is_valid(board[pos.y + y, pos.x + x]):
-                    board[pos.y + y, pos.x + x] = self.pen(pos.y + y, pos.x + x)
-
+                r_phi = Vec(y, x)
+                point = pos + r_phi
+                last_point = self.last_mouse_position + r_phi
+                self.paint_from_to(board, last_point, point, slope)
         self.last_mouse_position = pos
 
 
@@ -126,7 +142,7 @@ class Display:
         for level in self.board:
             for cell in level:
                 if cell is not None:
-                    cell.draw(self.win)
+                    cell.draw_and_reset(self.win)
 
     def map_colors(self) -> None:
         data, offset_y, offset_x = convert.convert_img()

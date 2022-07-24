@@ -1,14 +1,11 @@
 from copy import copy
+from typing import Union
 
 
 class Vec:
     def __init__(self, y: int = 0, x: int = 0) -> None:
         self._y: int = y
         self._x: int = x
-
-    def __iter__(self):
-        yield self._y
-        yield self._x
 
     def is_zero(self) -> bool:
         return self._y == 0 and self._x == 0
@@ -44,5 +41,24 @@ class Vec:
     def __ne__(self, other: 'Vec') -> bool:
         return not self == other
 
+    def round(self) -> 'Vec':
+        return Vec(round(self._y), round(self._x))
+
     def copy(self) -> 'Vec':
         return copy(self)
+
+
+def interpolate_pos(start: Vec, end: Vec, slope: Union[Vec, None] = None):
+    if slope is None:
+        slope = end - start
+        length = pow(pow(slope.y, 2) + pow(slope.x, 2), 0.5)
+        if length != 0:
+            slope.y /= length
+            slope.x /= length
+
+    while True:
+        pos = start.round()
+        yield pos
+        if pos == end:
+            return
+        start += slope
