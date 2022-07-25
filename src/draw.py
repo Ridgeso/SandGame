@@ -145,7 +145,7 @@ class Display:
                     cell.draw_and_reset(self.win)
 
     def map_colors(self) -> None:
-        data, offset_y, offset_x = convert.convert_img()
+        data, offset_y, offset_x = convert.convert_img(WX, WY)
         
         which_color = {"Sand": 0, "Water": 0, "Wood": 0, "Fire": 0, "Smoke": 0}
         color_obj = {"Sand": Sand, "Water": Water, "Wood": Wood, "Fire": Fire, "Smoke": Smoke}
