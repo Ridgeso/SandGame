@@ -14,6 +14,8 @@ class Board(np.ndarray):
 
     def swap(self, cell: Particle, y: int, x: int):
         temp = self[cell.pos.y, cell.pos.x]
+        if temp is None:
+            breakpoint()
         self[cell.pos.y, cell.pos.x] = self[y, x]
         self[y, x] = temp
 
@@ -83,6 +85,12 @@ class Brush:
                 self.paint_from_to(board, last_point, point, slope)
         self.last_mouse_position = pos
 
+    def erase(self, board):
+        pen = self.pen
+        self.pen = Eraser
+        self.paint(board)
+        self.pen = pen
+
 
 class Display:
     def __init__(self, y: int, x: int) -> None:
@@ -90,7 +98,7 @@ class Display:
         self.win_y = x
 
         self.win = py.display.set_mode((self.win_x, self.win_y))
-    
+
         self.board = Board(BOARDY, BOARDX)
         self.brush = Brush(Sand)
 
@@ -98,8 +106,6 @@ class Display:
         Left: int = 0
         Scroll: int = auto()
         Right: int = auto()
-        ScrollUp: int = auto()
-        ScrollDown: int = auto()
 
     def paint_particles(self) -> None:
         mouse_button_pressed = py.mouse.get_pressed(num_buttons=3)
@@ -107,17 +113,17 @@ class Display:
 
         if mouse_button_pressed[self.MouseKey.Left]:
             self.brush.paint(self.board)
+        elif mouse_button_pressed[self.MouseKey.Right]:
+            self.brush.erase(self.board)
         else:
             self.brush.last_mouse_position = None
 
-        if mouse_button_pressed[self.MouseKey.Scroll]:
+        if keys[py.K_s]:
             self.brush.pen = Sand
-        elif mouse_button_pressed[self.MouseKey.Right]:
-            self.brush.pen = Water        
         elif keys[py.K_q]:
             self.brush.pen = Wood
         elif keys[py.K_w]:
-            self.brush.pen = Eraser
+            self.brush.pen = Water
         elif keys[py.K_e]:
             self.brush.pen = Fire
         elif keys[py.K_r]:
@@ -146,21 +152,17 @@ class Display:
 
     def map_colors(self) -> None:
         data, offset_y, offset_x = convert.convert_img(WX, WY)
-        
+
         which_color = {"Sand": 0, "Water": 0, "Wood": 0, "Fire": 0, "Smoke": 0}
         color_obj = {"Sand": Sand, "Water": Water, "Wood": Wood, "Fire": Fire, "Smoke": Smoke}
 
         for i, pixels in enumerate(data):
             for j, pixel in enumerate(pixels):
-
+                if not self.board.in_bounds(offset_y+i, offset_x+j):
+                    return
                 for color in COLORS:
                     pos_difference = COLORS[color] - pixel[:3]
                     which_color[color] = min(map(lambda v: v[0]*v[0] + v[1]*v[1] + v[2]*v[2], pos_difference))
 
                 best_pixel = color_obj[min(which_color, key=which_color.get)]
-                # TODO: What is wrong with this exception bloc
-                try:
-                    self.board[offset_y+i][offset_x+j] = best_pixel(offset_y+i, offset_x+j)
-                except IndexError:
-                    print(offset_y+i, offset_x+j)
-                    return
+                self.board[offset_y+i][offset_x+j] = best_pixel(offset_y+i, offset_x+j)

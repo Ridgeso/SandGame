@@ -19,7 +19,7 @@ class ParticleType(Enum):
 
 
 class Particle:
-    Iterations: int = 3
+    Iterations: int = 1
     priority: Set[ParticleType] = set()
 
     def __init__(self, y: int, x: int, is_falling: bool = True, been_updated: bool = False) -> None:
@@ -34,6 +34,7 @@ class Particle:
         self.pos: Vec = Vec(y, x)
         self.vel: Vec = Vec()
         self.d: int = 0
+        # self.iter_pos: Vec = Vec()
 
     def _step(self, board) -> Tuple[bool, Vec]:
         pass
@@ -43,11 +44,12 @@ class Particle:
 
         self.d = -1 if random.randint(0, 1) else 1
         move = self.pos
+        # self.iter_pos = self.pos.copy()
         for i in range(self.Iterations):
             stop, move = self._step(board)
             if not stop:
                 break
-
+        # move = self.iter_pos
         if move != self.pos:
             board.swap(self, move.y, move.x)
         else:
@@ -58,8 +60,18 @@ class Particle:
         py.draw.rect(win, self.color, ((self.pos.x*SCALE, self.pos.y*SCALE), (SCALE, SCALE)), 0)
         self.been_updated = False
 
+    def push_neighbours(self, board):
+        if board.in_bounds(self.pos.y, self.pos.x - 1):
+            left = board[self.pos.y, self.pos.x - 1]
+            if left is not None and self.id() == left.id():
+                left.is_falling = True
+        if board.in_bounds(self.pos.y, self.pos.x + 1):
+            right = board[self.pos.y, self.pos.x + 1]
+            if right is not None and self.id() == right.id():
+                right.is_falling = True
+
     @classmethod
-    def id(cls):
+    def id(cls) -> ParticleType:
         return getattr(ParticleType, cls.__name__)
 
     @classmethod
@@ -80,25 +92,34 @@ class Sand(Particle):
         self.color = random.choice(COLORS["Sand"])
 
     def _step(self, board) -> Tuple[bool, Vec]:
-        # self.vel.y += GRAVITY
+        self.vel.y += GRAVITY
         # self.vel.x *= AIR_FRICTION
-        #
-        # start = self.pos.copy()
-        # end = (self.pos + self.vel).round()
-        # print(f"start: {start}    end: {end}")
-        # slope = self.vel.normalize()
-        # move = self.pos
-        # for pos in interpolate_pos(start, end, slope):
-        #     print(self.pos == pos)
-        #     if board.in_bounds(pos.y, pos.x) and self.is_valid(board[pos.y, pos.x]):
-        #         move = pos
-        #     else:
-        #         return False, move
+
         move = self.pos.copy()
-        if board.in_bounds(move.y + 1, move.x) and self.is_valid(board[move.y + 1, move.x]):
-            self.is_falling = True
-            move.y += 1
-        elif not self.is_falling:
+
+        start = self.pos.copy()
+        end = (self.pos + self.vel).round()
+        slope = self.vel.normalize()
+
+        to_the_goal = interpolate_pos(start, end, slope)
+        next(to_the_goal)
+
+        for pos in to_the_goal:
+            if not board.in_bounds(pos.y, pos.x):
+                return False, move
+            elif self.is_valid(board[pos.y, pos.x]):
+                move = pos
+                self.is_falling = True
+            else:
+                break
+                # return False, move
+
+        # if board.in_bounds(move.y + 1, move.x) and self.is_valid(board[move.y + 1, move.x]):
+        #     self.is_falling = True
+        #     move.y += 1
+        if not self.is_falling:
+            absY = max(abs(self.vel.y), 1)
+            self.vel.x = -absY if self.vel.x < 0 else absY
             return False, move
         elif board.in_bounds(move.y + 1, move.x + self.d) and self.is_valid(board[move.y + 1, move.x + self.d]):
             move.y += 1
@@ -109,15 +130,8 @@ class Sand(Particle):
         else:
             return False, move
 
-        if board.in_bounds(self.pos.y, self.pos.x - 1):
-            left = board[self.pos.y, self.pos.x - 1]
-            if left is not None and self.id() == left.id():
-                left.is_falling = True
-        if board.in_bounds(self.pos.y, self.pos.x + 1):
-            right = board[self.pos.y, self.pos.x + 1]
-            if right is not None and self.id() == right.id():
-                right.is_falling = True
-        #print("LOL ALE CHECA")
+        self.push_neighbours(board)
+
         return True, move
 
 
@@ -128,21 +142,38 @@ class Water(Particle):
         super(Water, self).__init__(y, x)
         self.color = random.choice(COLORS["Water"])
 
-    def _step(self, board, move: Vec) -> bool:
-        if board.in_bounds(move.y + 1, move.x) and self.is_valid(board[move.y + 1, move.x]):
-            move.y += 1
-        elif board.in_bounds(move.y + 1, move.x + self.d) and self.is_valid(board[move.y + 1, move.x + self.d]):
-            move.y += 1
-            move.x += self.d
-        elif board.in_bounds(move.y + 1, move.x - self.d) and self.is_valid(board[move.y + 1, move.x - self.d]):
-            move.y += 1
-            move.x -= self.d
-        elif board.in_bounds(move.y, move.x - self.d) and self.is_valid(board[move.y, move.x - self.d]):
-            move.x -= self.d
-        elif board.in_bounds(move.y, move.x + self.d) and self.is_valid(board[move.y, move.x + self.d]):
-            move.x += self.d
-        else:
-            return False
+    def _step(self, board) -> Tuple[bool, Vec]:
+        self.vel.y += GRAVITY
+        self.vel.x *= AIR_FRICTION
+
+        move = self.pos
+
+        start = self.pos.copy()
+        end = (self.pos + self.vel).round()
+        slope = self.vel.normalize()
+
+        to_the_goal = interpolate_pos(start, end, slope)
+        next(to_the_goal)
+
+        for pos in to_the_goal:
+            if board.in_bounds(pos.y, pos.x) and self.is_valid(board[pos.y, pos.x]):
+                move = pos
+            else:
+                return False, move
+        # if board.in_bounds(move.y + 1, move.x) and self.is_valid(board[move.y + 1, move.x]):
+        #     move.y += 1
+        # elif board.in_bounds(move.y + 1, move.x + self.d) and self.is_valid(board[move.y + 1, move.x + self.d]):
+        #     move.y += 1
+        #     move.x += self.d
+        # elif board.in_bounds(move.y + 1, move.x - self.d) and self.is_valid(board[move.y + 1, move.x - self.d]):
+        #     move.y += 1
+        #     move.x -= self.d
+        # elif board.in_bounds(move.y, move.x - self.d) and self.is_valid(board[move.y, move.x - self.d]):
+        #     move.x -= self.d
+        # elif board.in_bounds(move.y, move.x + self.d) and self.is_valid(board[move.y, move.x + self.d]):
+        #     move.x += self.d
+        # else:
+        #     return False
 
         if board.in_bounds(self.pos.y, self.pos.x - 1):
             left = board[self.pos.y, self.pos.x - 1]
@@ -153,7 +184,7 @@ class Water(Particle):
             if right is not None and ParticleType.Sand == right.id():
                 right.is_falling = True
 
-        return True
+        return True, move
 
     # def on_update(self, board) -> None:
     #     for i in reversed(range(1, self.Iterations)):
