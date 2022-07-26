@@ -29,7 +29,7 @@ class Brush:
     def __init__(self, pen: Type[Particle]) -> None:
         self._pen: Type[Particle] = pen
         self._pen_size: int = PAINT_SCALE
-        self.PenDeference: int = self._pen_size
+        self.PendDifference: int = self._pen_size
         self.last_mouse_position: Union[Vec, None] = Vec()
 
     @property
@@ -48,7 +48,7 @@ class Brush:
     def pen_size(self, value: int):
         if value > 0:
             self._pen_size = value
-            self.PenDeference = value
+            self.PendDifference = value
 
     def paint_point(self, board: Board, point: Vec) -> None:
         if not board.in_bounds(point.y, point.x):

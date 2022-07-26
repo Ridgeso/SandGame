@@ -32,8 +32,6 @@ class SandSim:
             
             py.display.flip()
 
-            # print(clock.get_fps())
-
             self.handle_events()
 
     def handle_events(self) -> None:
