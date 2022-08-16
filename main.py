@@ -4,6 +4,7 @@ from src.draw import (
     Display,
     WX, WY, FPS
 )
+from time import perf_counter
 # from cver.cdraw import Display
 
 
@@ -23,11 +24,18 @@ class SandSim:
 
             self.display.fill((0, 0, 0))
 
+            print()
+            start = perf_counter()
             if self.sim:
                 self.display.update()
+            print("[UPDATING]", perf_counter() - start)
 
             self.display.paint_particles()
+
+            start = perf_counter()
             self.display.redraw()
+            print("[DRAWING]", perf_counter() - start)
+            
             self.display.draw_cursor()
             
             py.display.flip()
