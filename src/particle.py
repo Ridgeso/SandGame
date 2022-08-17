@@ -1,11 +1,11 @@
 from typing import Set, Union
-import numpy as np
 from enum import Enum, auto
+
+import random
+import pygame as py
 
 from src.vec import Vec, interpolate_pos
 from values import *
-import pygame as py
-import random
 
 
 class ParticleType(Enum):
@@ -23,7 +23,7 @@ class Particle:
     Iterations: int = 3
 
     def __init__(self, y: int, x: int, is_falling: bool = True, been_updated: bool = False) -> None:
-        self.color: np.ndarray = np.array([0, 0, 0], dtype=np.uint8)
+        self.color: int = 0
 
         self.lifetime: float = 0.0
         self.flammable: float = 100.0
@@ -164,7 +164,7 @@ class Fire(Particle):
     def __init__(self, y: int, x: int, been_updated: bool = False) -> None:
         super(Fire, self).__init__(y, x, been_updated=been_updated)
         self.original_color = random.choice(COLORS["Fire"])
-        self.color = self.original_color.copy()
+        self.color = self.original_color
         self.heat = 100
         self.flammable = 1
 
@@ -204,7 +204,7 @@ class Fire(Particle):
                     if random.randint(0, 100) > cell.flammable:
                         board[self.pos.y + i, self.pos.x + j] = Fire(self.pos.y + i, self.pos.x + j, True)
 
-        self.color = self.original_color * (abs(self.heat)/100)
+        # self.color = self.original_color - (abs(self.heat)//100)
         self.heat -= 1
 
 
@@ -212,7 +212,7 @@ class Smoke(Particle):
     priority = {ParticleType.Sand, ParticleType.Water, ParticleType.Wood}
     Iterations = 1
 
-    def __init__(self, y: int, x: int, been_updated: bool = False):
+    def __init__(self, y: int, x: int, been_updated: bool = False) -> None:
         super(Smoke, self).__init__(y, x, been_updated=been_updated)
         self.color = random.choice(COLORS["Smoke"])
         self.lifetime = random.randint(10, 80)
@@ -248,9 +248,9 @@ class Eraser(Particle):
 
 
 COLORS = {
-    "Sand": np.array([[76, 70, 50], [74, 68, 48]]),
-    "Water": np.array([[28, 163, 236], [32, 169, 229]]),
-    "Wood": np.array([[35, 30, 24], [40, 40, 34]]),
-    "Fire": np.array([[206, 67, 32], [216, 75, 39]]),
-    "Smoke": np.array([[49, 49, 49], [41, 41, 41]])
+    "Sand": [0xE4EB15, 0xFFCD18, 0xC1C707, 0xE49009],
+    "Water": [0x0F5E9C, 0x1CA3EC, 0x2389DA, 0x5ABCD8],
+    "Wood": [0x461F00, 0x643D01, 0x8C6529],
+    "Fire": [0xFF0000, 0xFF4500, 0xE25822],
+    "Smoke": [0x0A0A0A, 0x232323, 0x2C2424]
 }

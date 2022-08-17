@@ -1,7 +1,8 @@
 from typing import Type, Tuple
 from enum import IntEnum
-import concurrent.futures as ct
-import multiprocessing as mp
+
+import pygame
+import numpy as np
 
 from src import convert
 from src.particle import *
@@ -14,7 +15,7 @@ class Board(np.ndarray):
     def in_bounds(self, y: int, x: int) -> bool:
         return 0 <= y < self.shape[0] and 0 <= x < self.shape[1]
 
-    def swap(self, cell: Particle, y: int, x: int):
+    def swap(self, cell: Particle, y: int, x: int) -> None:
         temp = self[cell.pos.y, cell.pos.x]
         if temp is None:
             breakpoint()
@@ -39,7 +40,7 @@ class Brush:
         return self._pen
 
     @pen.setter
-    def pen(self, value: Type[Particle]):
+    def pen(self, value: Type[Particle]) -> None:
         self._pen = value
 
     @property
@@ -63,7 +64,6 @@ class Brush:
             self.paint_point(board, pos)
 
     def paint(self, board: Board) -> None:
-        # TODO: draw in 'Display.boards'
         pos = Vec(*py.mouse.get_pos())
         pos.y, pos.x = pos.x, pos.y
 
@@ -88,7 +88,7 @@ class Brush:
                 self.paint_from_to(board, last_point, point, slope)
         self.last_mouse_position = pos
 
-    def erase(self, board):
+    def erase(self, board: Board) -> None:
         pen = self.pen
         self.pen = Eraser
         self.paint(board)
@@ -96,28 +96,17 @@ class Brush:
 
 
 class Display:
-    CHUNKS_COUNT: int = 4
-    CELLS_IN_ROW: int = WX//SCALE
-    CHUNKS_SIZE = CELLS_IN_ROW // CHUNKS_COUNT
-
     def __init__(self, y: int, x: int) -> None:
         self.win_x = y
         self.win_y = x
 
+        # Main window
         self.win = py.display.set_mode((self.win_x, self.win_y))
+        # Simulation Texture
+        self.surface = pygame.Surface((BOARDX, BOARDY))
 
         self.board = Board(BOARDY, BOARDX)
         self.brush = Brush(Sand)
-
-        # Threading
-        # TODO: merge 'board' with 'boards'
-        self.boards = np.array([Board(BOARDY, self.CELLS_IN_ROW) for _ in range(self.CHUNKS_COUNT)])
-        self.odd_chunks = np.array([
-            (self.CHUNKS_SIZE * i, self.CHUNKS_SIZE + self.CHUNKS_SIZE * i)
-            for i in range(0, self.CHUNKS_COUNT, 2)])
-        self.even_chunks = np.array([
-            (self.CHUNKS_SIZE * i, self.CHUNKS_SIZE + self.CHUNKS_SIZE * i)
-            for i in range(1, self.CHUNKS_COUNT, 2)])
 
     class MouseKey(IntEnum):
         Left: int = 0
@@ -146,7 +135,7 @@ class Display:
         elif keys[py.K_r]:
             self.brush.pen = Smoke
 
-    def resize_cursor(self, value: int):
+    def resize_cursor(self, value: int) -> None:
         self.brush.pen_size += value
 
     def draw_cursor(self) -> None:
@@ -170,32 +159,22 @@ class Display:
 
     def update(self) -> None:
         # TODO: group screen into chunks of last moved cells
-        # for level in reversed(self.board):
-        #     for cell in level:
-        #         if cell is not None:
-        #             cell.on_update(self.board)
-        with ct.ThreadPoolExecutor() as t:
-            t.map(self._partial_board_update, self.boards)
-        # with ct.ThreadPoolExecutor() as t:
-        #     t.map(self._partial_update, self.odd_chunks)
-        # with ct.ThreadPoolExecutor() as t:
-        #     t.map(self._partial_update, self.even_chunks)
-
-    def _partial_draw(self, chunk):
-        for level in range(self.board.shape[0]):
-            for cell in range(*chunk):
-                if self.board[level, cell] is not None:
-                    self.board[level, cell].draw_and_reset(self.win)
+        for level in reversed(self.board):
+            for cell in level:
+                if cell is not None:
+                    cell.on_update(self.board)
 
     def redraw(self) -> None:
-        # for level in self.board:
-        #     for cell in level:
-        #         if cell is not None:
-        #             cell.draw_and_reset(self.win)
-        with ct.ThreadPoolExecutor() as t:
-            t.map(self._partial_draw, self.odd_chunks)
-        with ct.ThreadPoolExecutor() as t:
-            t.map(self._partial_draw, self.even_chunks)
+        for j, level in enumerate(self.board):
+            for i, cell in enumerate(level):
+                if cell is not None:
+                    self.surface.set_at((i, j), cell.color)
+                    cell.been_updated = False
+                else:
+                    self.surface.set_at((i, j), 0x00_00_00)
+
+        surf = py.transform.scale(self.surface, (800, 640))
+        self.win.blit(surf, (0, 0))
 
     def map_colors(self) -> None:
         data, offset_y, offset_x = convert.convert_img(WX, WY)
