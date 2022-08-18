@@ -1,98 +1,13 @@
 from typing import Type, Tuple
 from enum import IntEnum
+from time import perf_counter
 
-import pygame
+import pygame as py
 import numpy as np
 
 from src import convert
 from src.particle import *
-
-
-class Board(np.ndarray):
-    def __new__(cls, y: int, x: int) -> 'Board':
-        return super().__new__(cls, (y, x), dtype=object)
-
-    def in_bounds(self, y: int, x: int) -> bool:
-        return 0 <= y < self.shape[0] and 0 <= x < self.shape[1]
-
-    def swap(self, cell: Particle, y: int, x: int) -> None:
-        temp = self[cell.pos.y, cell.pos.x]
-        if temp is None:
-            breakpoint()
-        self[cell.pos.y, cell.pos.x] = self[y, x]
-        self[y, x] = temp
-
-        if self[cell.pos.y, cell.pos.x] is not None:
-            self[cell.pos.y, cell.pos.x].pos = cell.pos
-
-        self[y, x].pos = Vec(y, x)
-
-
-class Brush:
-    def __init__(self, pen: Type[Particle]) -> None:
-        self._pen: Type[Particle] = pen
-        self._pen_size: int = PAINT_SCALE
-        self.PendDifference: int = self._pen_size
-        self.last_mouse_position: Union[Vec, None] = Vec()
-
-    @property
-    def pen(self) -> Type[Particle]:
-        return self._pen
-
-    @pen.setter
-    def pen(self, value: Type[Particle]) -> None:
-        self._pen = value
-
-    @property
-    def pen_size(self) -> int:
-        return self._pen_size
-
-    @pen_size.setter
-    def pen_size(self, value: int):
-        if value > 0:
-            self._pen_size = value
-            self.PendDifference = value
-
-    def paint_point(self, board: Board, point: Vec) -> None:
-        if not board.in_bounds(point.y, point.x):
-            return
-        if self.pen.is_valid(board[point.y, point.x]):
-            board[point.y, point.x] = self.pen(point.y, point.x)
-
-    def paint_from_to(self, board: Board, start: Vec, end: Vec, slope: Union[Vec, None] = None) -> None:
-        for pos in interpolate_pos(start, end, slope):
-            self.paint_point(board, pos)
-
-    def paint(self, board: Board) -> None:
-        pos = Vec(*py.mouse.get_pos())
-        pos.y, pos.x = pos.x, pos.y
-
-        pos.y //= SCALE
-        pos.x //= SCALE
-
-        if self.last_mouse_position is None:
-            self.last_mouse_position = Vec(pos.y, pos.x)
-        slope = pos - self.last_mouse_position
-        length = pow(pow(slope.y, 2) + pow(slope.x, 2), 0.5)
-        if length != 0:
-            slope.y /= length
-            slope.x /= length
-
-        for y in range(-self.pen_size, self.pen_size):
-            offset = pow((pow(self.pen_size, 2) - pow(y, 2)), 0.5)
-            offset = round(offset)
-            for x in range(-offset, offset):
-                r_phi = Vec(y, x)
-                point = pos + r_phi
-                last_point = self.last_mouse_position + r_phi
-                self.paint_from_to(board, last_point, point, slope)
-        self.last_mouse_position = pos
-
-    def erase(self, board: Board) -> None:
-        pen = self.pen
-        self.pen = Eraser
-        self.paint(board)
-        self.pen = pen
+from src.tools import *
 
 
 class Display:
@@ -103,10 +18,28 @@ class Display:
         # Main window
         self.win = py.display.set_mode((self.win_x, self.win_y))
         # Simulation Texture
-        self.surface = pygame.Surface((BOARDX, BOARDY))
+        self.surface = py.Surface((BOARD_X, BOARD_Y))
 
-        self.board = Board(BOARDY, BOARDX)
+        # Board
+        self.board = Board(BOARD_Y, BOARD_X)
         self.brush = Brush(Sand)
+
+        # Chunks
+        self.chunk_size = 10  # 10 x 10
+        temp_chunks = []
+        for row in range(0, BOARD_Y, self.chunk_size):
+            # max chunk size or chunk loss
+            chunk_height = self.chunk_size if BOARD_Y - row > self.chunk_size else BOARD_Y - row
+            for column in range(0, BOARD_X, self.chunk_size):
+                # max chunk size or chunk loss
+                chunk_width = self.chunk_size if BOARD_X - column > self.chunk_size else BOARD_X - column
+                temp_chunks.append(Chunk(
+                    row, column,
+                    chunk_height, chunk_width,
+                    True, False
+                ))
+        self.chunks = np.array(temp_chunks)
+        print(self.chunks)
 
     class MouseKey(IntEnum):
         Left: int = 0
@@ -150,19 +83,22 @@ class Display:
                 if self.board[level, cell] is not None:
                     self.board[level, cell].on_update(self.board)
 
-    @staticmethod
-    def _partial_board_update(self, chunk: Board) -> None:
-        for level in reversed(chunk):
-            for cell in level:
-                if cell is not None:
-                    cell.on_update(chunk)
-
     def update(self) -> None:
         # TODO: group screen into chunks of last moved cells
-        for level in reversed(self.board):
-            for cell in level:
-                if cell is not None:
-                    cell.on_update(self.board)
+        start = perf_counter()
+        for chunk in reversed(self.chunks):
+            if not chunk.is_active():
+                continue
+            for i in reversed(range(chunk.width)):
+                for j in range(chunk.height):
+                    cell = self.board[chunk.x+i, chunk.y+j]
+                    if cell is not None:
+                        have_moved = cell.on_update(self.board)
+                        cell.been_updated = False
+                        if have_moved:
+                            chunk.activate()
+            chunk.update()
+        print("[UPDATING CHUNKS]", perf_counter() - start)
 
     def redraw(self) -> None:
         for j, level in enumerate(self.board):
@@ -173,8 +109,11 @@ class Display:
                 else:
                     self.surface.set_at((i, j), 0x00_00_00)
 
-        surf = py.transform.scale(self.surface, (800, 640))
+        surf = py.transform.scale(self.surface, (WX, WY))
         self.win.blit(surf, (0, 0))
+
+        for chunk in self.chunks:
+            chunk.draw_debug_chunk(self.win)
 
     def map_colors(self) -> None:
         data, offset_y, offset_x = convert.convert_img(WX, WY)

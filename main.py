@@ -24,11 +24,8 @@ class SandSim:
 
             self.display.fill((0, 0, 0))
 
-            # print()
-            start = perf_counter()
             if self.sim:
                 self.display.update()
-            # print("[UPDATING]", perf_counter() - start)
 
             self.display.paint_particles()
             self.display.redraw()

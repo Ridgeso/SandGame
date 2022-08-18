@@ -1,4 +1,4 @@
-from typing import Set, Union
+from typing import Type, Set, Union
 from enum import Enum, auto
 
 import random
@@ -6,10 +6,11 @@ import pygame as py
 
 from src.vec import Vec, interpolate_pos
 from values import *
+Board = Type['Board']
 
 
 class ParticleType(Enum):
-    Particle = 0
+    Particle: int = 0
     Sand: int = auto()
     Water: int = auto()
     Fire: int = auto()
@@ -35,12 +36,13 @@ class Particle:
         self.pos: Vec = Vec(y, x)
         self.d: int = 0
 
-    def _step(self, board, move) -> bool:
+    def _step(self, board: Board, move: Vec) -> bool:
         pass
 
-    def on_update(self, board) -> None:
+    def on_update(self, board: Board) -> bool:
         if self.been_updated:
-            return
+            return False
+
         self.been_updated = True
         self.lifetime -= 1
 
@@ -54,14 +56,16 @@ class Particle:
 
         if move != self.pos:
             board.swap(self, move.y, move.x)
+            return True
         else:
             self.is_falling = False
+            return False
 
     def draw_and_reset(self, win: py.Surface) -> None:
         py.draw.rect(win, self.color, ((self.pos.x*SCALE, self.pos.y*SCALE), (SCALE, SCALE)), 0)
         self.been_updated = False
 
-    def push_neighbours(self, board):
+    def push_neighbours(self, board: Board):
         if board.in_bounds(self.pos.y, self.pos.x - 1):
             left = board[self.pos.y, self.pos.x - 1]
             if left is not None and self.id() == left.id():
@@ -93,7 +97,7 @@ class Sand(Particle):
         self.color = random.choice(COLORS["Sand"])
         self.friction = 0.75
 
-    def _step(self, board, move: Vec) -> bool:
+    def _step(self, board: Board, move: Vec) -> bool:
         if board.in_bounds(move.y + 1, move.x) and self.is_valid(board[move.y + 1, move.x]):
             self.is_falling = True
             move.y += 1
@@ -120,7 +124,7 @@ class Water(Particle):
         super(Water, self).__init__(y, x)
         self.color = random.choice(COLORS["Water"])
 
-    def _step(self, board, move: Vec) -> bool:
+    def _step(self, board: Board, move: Vec) -> bool:
         if board.in_bounds(move.y + 1, move.x) and self.is_valid(board[move.y + 1, move.x]):
             move.y += 1
         elif board.in_bounds(move.y + 1, move.x + self.d) and self.is_valid(board[move.y + 1, move.x + self.d]):
@@ -154,8 +158,8 @@ class Wood(Particle):
         self.flammable = 96
         self.lifetime = 100
 
-    def on_update(self, board) -> None:
-        pass
+    def on_update(self, board: Board) -> bool:
+        return False
 
 
 class Fire(Particle):
@@ -182,12 +186,12 @@ class Fire(Particle):
         if self.heat > 100:
             self.heat = 100
 
-    def on_update(self, board) -> None:
+    def on_update(self, board: Board) -> bool:
         if self.been_updated:
-            return
+            return False
         if self.heat <= 0:
             board[self.pos.y, self.pos.x] = None
-            return
+            return True
         for i in range(-1, 2):
             for j in range(-1, 2):
                 if i == 0 and j == 0 or not board.in_bounds(self.pos.y + i, self.pos.x + j):
@@ -206,6 +210,7 @@ class Fire(Particle):
 
         # self.color = self.original_color - (abs(self.heat)//100)
         self.heat -= 1
+        return True
 
 
 class Smoke(Particle):
@@ -217,7 +222,7 @@ class Smoke(Particle):
         self.color = random.choice(COLORS["Smoke"])
         self.lifetime = random.randint(10, 80)
 
-    def _step(self, board, move) -> bool:
+    def _step(self, board: Board, move: Vec) -> bool:
         if self.lifetime < 0:
             board[self.pos.y, self.pos.x] = None
             return False
@@ -247,7 +252,7 @@ class Eraser(Particle):
         return True
 
 
-COLORS = {
+COLORS = {  # R G B  24bits
     "Sand": [0xE4EB15, 0xFFCD18, 0xC1C707, 0xE49009],
     "Water": [0x0F5E9C, 0x1CA3EC, 0x2389DA, 0x5ABCD8],
     "Wood": [0x461F00, 0x643D01, 0x8C6529],
