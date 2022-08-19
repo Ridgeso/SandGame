@@ -1,4 +1,6 @@
-from typing import Type
+from typing import Type, Callable
+from functools import wraps
+from time import perf_counter
 
 import numpy as np
 import pygame as py
@@ -37,7 +39,7 @@ class Chunk:
             self.updated_this_frame = False
 
     def __repr__(self):
-        return f"Chunk(x1={self.x},y1={self.y},x1={self.width},y1={self.height})\n"
+        return f"Chunk(x1={self.x},y1={self.y},x1={self.width},y1={self.height})"
 
     def draw_debug_chunk(self, win):
         color = 0x00FF00 if self.updated_this_frame else 0xFF0000
@@ -99,8 +101,8 @@ class Brush:
         for pos in interpolate_pos(start, end, slope):
             self.paint_point(board, pos)
 
-    def paint(self, board: Board) -> None:
-        pos = Vec(*py.mouse.get_pos())
+    def paint(self, board: Board, pos: Vec) -> None:
+        # pos = Vec(*py.mouse.get_pos())
         pos.y, pos.x = pos.x, pos.y
 
         pos.y //= SCALE
@@ -114,6 +116,19 @@ class Brush:
             slope.y /= length
             slope.x /= length
 
+        # drawing cross that expends over the gap between the brush positions
+        for offset in range(-self.pen_size, self.pen_size):
+            y = Vec(offset, 0)
+            point_y = pos + y
+            last_point_y = self.last_mouse_position + y
+            self.paint_from_to(board, last_point_y, point_y, slope)
+
+            x = Vec(0, offset)
+            point_x = pos + x
+            last_point_x = self.last_mouse_position + x
+            self.paint_from_to(board, last_point_x, point_x, slope)
+
+        # drawing a circle at the previous point and the current point
         for y in range(-self.pen_size, self.pen_size):
             offset = pow((pow(self.pen_size, 2) - pow(y, 2)), 0.5)
             offset = round(offset)
@@ -121,7 +136,9 @@ class Brush:
                 r_phi = Vec(y, x)
                 point = pos + r_phi
                 last_point = self.last_mouse_position + r_phi
-                self.paint_from_to(board, last_point, point, slope)
+                self.paint_point(board, point)
+                self.paint_point(board, last_point)
+
         self.last_mouse_position = pos
 
     def erase(self, board: Board) -> None:
@@ -129,3 +146,16 @@ class Brush:
         self.pen = Eraser
         self.paint(board)
         self.pen = pen
+
+
+# Debug
+def timeit(log: str = ""):
+    def profile(f: Callable):
+        @wraps(f)
+        def wrapper(*args, **kwargs):
+            start = perf_counter()
+            f(*args, **kwargs)
+            end = 1000 * (perf_counter() - start)
+            print(log, f"{end:.03f} ms | AT [{f.__name__}]")
+        return wrapper
+    return profile

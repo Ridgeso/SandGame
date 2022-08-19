@@ -43,6 +43,9 @@ class Vec:
     def __ne__(self, other: 'Vec') -> bool:
         return not self == other
 
+    def __hash__(self) -> int:
+        return hash((self._x, self._y))
+
     def round(self) -> 'Vec':
         return Vec(round(self._y), round(self._x))
 

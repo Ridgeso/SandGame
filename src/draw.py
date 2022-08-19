@@ -1,6 +1,5 @@
 from typing import Type, Tuple
 from enum import IntEnum
-from time import perf_counter
 
 import pygame as py
 import numpy as np
@@ -22,24 +21,33 @@ class Display:
 
         # Board
         self.board = Board(BOARD_Y, BOARD_X)
+        self.board[10, 50] = Sand(10, 50)
         self.brush = Brush(Sand)
 
         # Chunks
         self.chunk_size = 10  # 10 x 10
         temp_chunks = []
         for row in range(0, BOARD_Y, self.chunk_size):
+            temp_chunk_row = []
             # max chunk size or chunk loss
             chunk_height = self.chunk_size if BOARD_Y - row > self.chunk_size else BOARD_Y - row
             for column in range(0, BOARD_X, self.chunk_size):
                 # max chunk size or chunk loss
                 chunk_width = self.chunk_size if BOARD_X - column > self.chunk_size else BOARD_X - column
-                temp_chunks.append(Chunk(
+                # temp_chunks.append(Chunk(
+                temp_chunk_row.append(Chunk(
                     row, column,
                     chunk_height, chunk_width,
                     True, False
                 ))
+            temp_chunks.append(temp_chunk_row)
+
         self.chunks = np.array(temp_chunks)
-        print(self.chunks)
+        self.chunk_threshold = SCALE * self.chunk_size
+        # if i change my mind
+        # rand_pos = Vec(635, 324)
+        # x = rand_pos.x // SCALE // self.chunk_size
+        # y = rand_pos.y // SCALE // self.chunk_size
 
     class MouseKey(IntEnum):
         Left: int = 0
@@ -50,8 +58,13 @@ class Display:
         mouse_button_pressed = py.mouse.get_pressed(num_buttons=3)
         keys = py.key.get_pressed()
 
+        mouse_pos = Vec(*py.mouse.get_pos())
+        chunk_pos = Vec(mouse_pos.x // self.chunk_threshold, mouse_pos.y // self.chunk_threshold)
+        chunk = self.chunks[chunk_pos.y, chunk_pos.x]
+        chunk.updated_this_frame = True
         if mouse_button_pressed[self.MouseKey.Left]:
-            self.brush.paint(self.board)
+            self.brush.paint(self.board, mouse_pos)
+            # Activate chunks
         elif mouse_button_pressed[self.MouseKey.Right]:
             self.brush.erase(self.board)
         else:
@@ -83,22 +96,27 @@ class Display:
                 if self.board[level, cell] is not None:
                     self.board[level, cell].on_update(self.board)
 
+    def update_chunk(self, chunk: Chunk) -> None:
+        for i in reversed(range(chunk.width)):
+            for j in range(chunk.height):
+                cell = self.board[chunk.x + i, chunk.y + j]
+                if cell is not None:
+                    have_moved = cell.on_update(self.board)
+                    if have_moved:
+                        cell_chunk = Vec(cell.pos.y // self.chunk_threshold, cell.pos.x // self.chunk_threshold)
+                        self.chunks[cell_chunk.y, cell_chunk.x].activate()
+
+                    cell.been_updated = True
+
+    # @timeit(log="[UPDATING]")
     def update(self) -> None:
         # TODO: group screen into chunks of last moved cells
-        start = perf_counter()
-        for chunk in reversed(self.chunks):
-            if not chunk.is_active():
-                continue
-            for i in reversed(range(chunk.width)):
-                for j in range(chunk.height):
-                    cell = self.board[chunk.x+i, chunk.y+j]
-                    if cell is not None:
-                        have_moved = cell.on_update(self.board)
-                        cell.been_updated = False
-                        if have_moved:
-                            chunk.activate()
-            chunk.update()
-        print("[UPDATING CHUNKS]", perf_counter() - start)
+        for chunk_row in reversed(self.chunks):
+            for chunk in chunk_row:
+                if not chunk.is_active():
+                    continue
+                self.update_chunk(chunk)
+                chunk.update()
 
     def redraw(self) -> None:
         for j, level in enumerate(self.board):
@@ -112,8 +130,9 @@ class Display:
         surf = py.transform.scale(self.surface, (WX, WY))
         self.win.blit(surf, (0, 0))
 
-        for chunk in self.chunks:
-            chunk.draw_debug_chunk(self.win)
+        for chunk_row in self.chunks:
+            for chunk in chunk_row:
+                chunk.draw_debug_chunk(self.win)
 
     def map_colors(self) -> None:
         data, offset_y, offset_x = convert.convert_img(WX, WY)
