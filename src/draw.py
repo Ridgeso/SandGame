@@ -48,6 +48,7 @@ class Display:
         # rand_pos = Vec(635, 324)
         # x = rand_pos.x // SCALE // self.chunk_size
         # y = rand_pos.y // SCALE // self.chunk_size
+        self.max_time = 0
 
     class MouseKey(IntEnum):
         Left: int = 0
@@ -60,13 +61,24 @@ class Display:
 
         mouse_pos = Vec(*py.mouse.get_pos())
         chunk_pos = Vec(mouse_pos.x // self.chunk_threshold, mouse_pos.y // self.chunk_threshold)
-        chunk = self.chunks[chunk_pos.y, chunk_pos.x]
-        chunk.updated_this_frame = True
+        mouse_chunk = self.chunks[chunk_pos.y, chunk_pos.x]
+        mouse_chunk.updated_this_frame = True
+
+        def activate_chunks_on_draw():
+            for chunk_row in self.chunks:
+                for chunk in chunk_row:
+                    if chunk_intersect_with_brush(chunk, self.brush, mouse_pos):
+                        chunk.activate()
+                        chunk.update()
+
         if mouse_button_pressed[self.MouseKey.Left]:
             self.brush.paint(self.board, mouse_pos)
             # Activate chunks
+            activate_chunks_on_draw()
         elif mouse_button_pressed[self.MouseKey.Right]:
-            self.brush.erase(self.board)
+            self.brush.erase(self.board, mouse_pos)
+            # Activate chunks
+            activate_chunks_on_draw()
         else:
             self.brush.last_mouse_position = None
 
@@ -103,19 +115,21 @@ class Display:
                 if cell is not None:
                     have_moved = cell.on_update(self.board)
                     if have_moved:
-                        cell_chunk = Vec(cell.pos.y // self.chunk_threshold, cell.pos.x // self.chunk_threshold)
+                        cell_chunk = Vec(cell.pos.y // self.chunk_size, cell.pos.x // self.chunk_size)
                         self.chunks[cell_chunk.y, cell_chunk.x].activate()
 
                     cell.been_updated = True
 
-    # @timeit(log="[UPDATING]")
+    @Timeit(log="[UPDATING]", max_time=True, min_time=True)
     def update(self) -> None:
-        # TODO: group screen into chunks of last moved cells
+        # TODO: Fix Bug that not empty chunks above empty is not updating
         for chunk_row in reversed(self.chunks):
             for chunk in chunk_row:
                 if not chunk.is_active():
                     continue
                 self.update_chunk(chunk)
+        for chunk_row in self.chunks:
+            for chunk in chunk_row:
                 chunk.update()
 
     def redraw(self) -> None:

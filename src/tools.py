@@ -141,21 +141,64 @@ class Brush:
 
         self.last_mouse_position = pos
 
-    def erase(self, board: Board) -> None:
+    def erase(self, board: Board, pos: Vec) -> None:
         pen = self.pen
         self.pen = Eraser
-        self.paint(board)
+        self.paint(board, pos)
         self.pen = pen
 
 
+def chunk_intersect_with_brush(chunk: Chunk, brush: Brush, brush_pos: Vec) -> bool:
+    # TODO: Left top chunks are always active
+    brush_pos = brush_pos.copy()
+    brush_pos.x = brush_pos.x // SCALE
+    brush_pos.y = brush_pos.y // SCALE
+
+    # Calculating relative position between Chunk and Brush (on the left or right side, above or below)
+    near = Vec(max(chunk.y, min(chunk.y + chunk.height, brush_pos.y)),
+               max(chunk.x, min(chunk.x + chunk.width, brush_pos.x)))
+
+    # Nearest point downsize to the origin
+    near -= brush_pos
+
+    # if distance is lower than brush radius we have an intersection
+    distance = pow(pow(near.y, 2) + pow(near.x, 2), 0.5)
+
+    if distance <= brush.pen_size:
+        return True
+
+    return False
+
+
 # Debug
-def timeit(log: str = ""):
-    def profile(f: Callable):
+class Timeit:
+    def __init__(self, log: str = "", max_time: bool = False, min_time: bool = False) -> None:
+        self.log = log + " | AT [{}] | {:7.03f} ms"
+
+        self.max_time = max_time
+        self.min_time = min_time
+
+        self.max_time_spend = 0
+        self.min_time_spend = 1_000_000
+
+    def __call__(self, f: Callable):
         @wraps(f)
         def wrapper(*args, **kwargs):
+            # Function
             start = perf_counter()
-            f(*args, **kwargs)
-            end = 1000 * (perf_counter() - start)
-            print(log, f"{end:.03f} ms | AT [{f.__name__}]")
+            result = f(*args, **kwargs)
+            end = perf_counter()
+            end = 1000 * (end - start)
+
+            # Logging
+            log = self.log.format(f.__name__, end)
+            if self.max_time:
+                self.max_time_spend = max(end, self.max_time_spend)
+                log += f" | Max {self.max_time_spend: 7.03f}"
+            if self.min_time:
+                self.min_time_spend = min(end, self.min_time_spend)
+                log += f" | Min {self.min_time_spend: 7.03f}"
+            print(log)
+
+            return result
         return wrapper
-    return profile
