@@ -24,6 +24,7 @@ class Particle:
     Iterations: int = 3
 
     def __init__(self, y: int, x: int, is_falling: bool = True, been_updated: bool = False) -> None:
+        self.has_been_modified = False
         self.color: int = 0
 
         self.lifetime: float = 0.0
@@ -34,7 +35,6 @@ class Particle:
         self.is_falling: bool = is_falling
 
         self.pos: Vec = Vec(y, x)
-        self.d: int = 0
 
     def _step(self, board: Board, move: Vec) -> bool:
         pass
@@ -42,28 +42,27 @@ class Particle:
     def on_update(self, board: Board) -> bool:
         if self.been_updated:
             return False
-
         self.been_updated = True
-        self.lifetime -= 1
 
-        self.d = -1 if random.randint(0, 1) else 1
         move = self.pos.copy()
 
         for i in range(self.Iterations):
             stop = self._step(board, move)
             if not stop:
                 break
+            else:
+                self.has_been_modified = True
 
         if move != self.pos:
             board.swap(self, move.y, move.x)
-            return True
         else:
             self.is_falling = False
-            return False
 
-    def draw_and_reset(self, win: py.Surface) -> None:
-        py.draw.rect(win, self.color, ((self.pos.x*SCALE, self.pos.y*SCALE), (SCALE, SCALE)), 0)
+        return self.has_been_modified
+
+    def reset(self) -> None:
         self.been_updated = False
+        self.has_been_modified = False
 
     def push_neighbours(self, board: Board):
         if board.in_bounds(self.pos.y, self.pos.x - 1):
@@ -101,19 +100,23 @@ class Sand(Particle):
         if board.in_bounds(move.y + 1, move.x) and self.is_valid(board[move.y + 1, move.x]):
             self.is_falling = True
             move.y += 1
+            self.push_neighbours(board)
+            return True
+
         if not self.is_falling:
             return False
-        elif board.in_bounds(move.y + 1, move.x + self.d) and self.is_valid(board[move.y + 1, move.x + self.d]):
+
+        d = -1 if random.randint(0, 1) else 1
+        if board.in_bounds(move.y + 1, move.x + d) and self.is_valid(board[move.y + 1, move.x + d]):
             move.y += 1
-            move.x += self.d
-        elif board.in_bounds(move.y + 1, move.x - self.d) and self.is_valid(board[move.y + 1, move.x - self.d]):
+            move.x += d
+        elif board.in_bounds(move.y + 1, move.x - d) and self.is_valid(board[move.y + 1, move.x - d]):
             move.y += 1
-            move.x -= self.d
+            move.x -= d
         else:
             return False
 
         self.push_neighbours(board)
-
         return True
 
 
@@ -127,28 +130,38 @@ class Water(Particle):
     def _step(self, board: Board, move: Vec) -> bool:
         if board.in_bounds(move.y + 1, move.x) and self.is_valid(board[move.y + 1, move.x]):
             move.y += 1
-        elif board.in_bounds(move.y + 1, move.x + self.d) and self.is_valid(board[move.y + 1, move.x + self.d]):
+            return True
+
+        d = -1 if random.randint(0, 1) else 1
+        if board.in_bounds(move.y + 1, move.x + d) and self.is_valid(board[move.y + 1, move.x + d]):
             move.y += 1
-            move.x += self.d
-        elif board.in_bounds(move.y + 1, move.x - self.d) and self.is_valid(board[move.y + 1, move.x - self.d]):
+            move.x += d
+            return True
+
+        if board.in_bounds(move.y + 1, move.x - d) and self.is_valid(board[move.y + 1, move.x - d]):
             move.y += 1
-            move.x -= self.d
-        else:
-            start = self.pos.copy()
-            end = start + Vec(0, self.d*5)
-            slope = Vec(0, self.d)
+            move.x -= d
+            return True
 
-            flow = interpolate_pos(start, end, slope)
-            next(flow)
+        if board.in_bounds(move.y + 1, move.x + d) and self.is_valid(board[move.y + 1, move.x + d]):
+            move.y += 1
+            move.x += d
+            return True
 
-            for pos in flow:
-                if board.in_bounds(pos.y, pos.x) and self.is_valid(board[pos.y, pos.x]):
-                    move.y = pos.y
-                    move.x = pos.x
-                else:
-                    return False
+        if board.in_bounds(move.y + 1, move.x - d) and self.is_valid(board[move.y + 1, move.x - d]):
+            move.y += 1
+            move.x -= d
+            return True
 
-        return True
+        if board.in_bounds(move.y, move.x + d) and self.is_valid(board[move.y, move.x + d]):
+            move.x += d
+            return True
+
+        if board.in_bounds(move.y, move.x - d) and self.is_valid(board[move.y, move.x - d]):
+            move.x -= d
+            return True
+
+        return False
 
 
 class Wood(Particle):
@@ -189,12 +202,15 @@ class Fire(Particle):
     def on_update(self, board: Board) -> bool:
         if self.been_updated:
             return False
+        self.been_updated = True
+
         if self.heat <= 0:
             board[self.pos.y, self.pos.x] = None
             return True
+
         for i in range(-1, 2):
             for j in range(-1, 2):
-                if i == 0 and j == 0 or not board.in_bounds(self.pos.y + i, self.pos.x + j):
+                if (i == 0 and j == 0) or not board.in_bounds(self.pos.y + i, self.pos.x + j):
                     continue
 
                 cell = board[self.pos.y + i, self.pos.x + j]
@@ -226,19 +242,21 @@ class Smoke(Particle):
         if self.lifetime < 0:
             board[self.pos.y, self.pos.x] = None
             return False
+        self.lifetime -= 1
 
         if board.in_bounds(move.y - 1, move.x) and board[move.y - 1, move.x] is None:
             move.y -= 1
 
-        if random.randint(0, 1):
+        d = random.randint(-1, 1)
+        if not d:
             return True
 
-        if board.in_bounds(move.y - 1, move.x - self.d) and board[move.y - 1, move.x - self.d] is None:
+        if board.in_bounds(move.y - 1, move.x - d) and board[move.y - 1, move.x - d] is None:
             move.y = move.y - 1
-            move.x = move.x - self.d
-        elif board.in_bounds(move.y - 1, move.x + self.d) and board[move.y - 1, move.x + self.d] is None:
+            move.x = move.x - d
+        elif board.in_bounds(move.y - 1, move.x + d) and board[move.y - 1, move.x + d] is None:
             move.y = self.pos.y - 1
-            move.x = self.pos.x + self.d
+            move.x = self.pos.x + d
 
         return True
 

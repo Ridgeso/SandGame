@@ -39,7 +39,7 @@ class Chunk:
             self.updated_this_frame = False
 
     def __repr__(self):
-        return f"Chunk(x1={self.x},y1={self.y},x1={self.width},y1={self.height})"
+        return f"Chunk(y={self.x},x={self.y},h={self.width},w={self.height})"
 
     def draw_debug_chunk(self, win):
         color = 0x00FF00 if self.updated_this_frame else 0xFF0000
@@ -102,7 +102,7 @@ class Brush:
             self.paint_point(board, pos)
 
     def paint(self, board: Board, pos: Vec) -> None:
-        # pos = Vec(*py.mouse.get_pos())
+        pos = pos.copy()
         pos.y, pos.x = pos.x, pos.y
 
         pos.y //= SCALE
@@ -149,7 +149,6 @@ class Brush:
 
 
 def chunk_intersect_with_brush(chunk: Chunk, brush: Brush, brush_pos: Vec) -> bool:
-    # TODO: Left top chunks are always active
     brush_pos = brush_pos.copy()
     brush_pos.x = brush_pos.x // SCALE
     brush_pos.y = brush_pos.y // SCALE

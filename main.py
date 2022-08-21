@@ -29,6 +29,7 @@ class SandSim:
 
             self.display.paint_particles()
             self.display.redraw()
+            self.display.reset_chunks()
             self.display.draw_cursor()
 
             py.display.flip()

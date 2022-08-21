@@ -34,7 +34,6 @@ class Display:
             for column in range(0, BOARD_X, self.chunk_size):
                 # max chunk size or chunk loss
                 chunk_width = self.chunk_size if BOARD_X - column > self.chunk_size else BOARD_X - column
-                # temp_chunks.append(Chunk(
                 temp_chunk_row.append(Chunk(
                     row, column,
                     chunk_height, chunk_width,
@@ -44,11 +43,6 @@ class Display:
 
         self.chunks = np.array(temp_chunks)
         self.chunk_threshold = SCALE * self.chunk_size
-        # if i change my mind
-        # rand_pos = Vec(635, 324)
-        # x = rand_pos.x // SCALE // self.chunk_size
-        # y = rand_pos.y // SCALE // self.chunk_size
-        self.max_time = 0
 
     class MouseKey(IntEnum):
         Left: int = 0
@@ -69,7 +63,6 @@ class Display:
                 for chunk in chunk_row:
                     if chunk_intersect_with_brush(chunk, self.brush, mouse_pos):
                         chunk.activate()
-                        chunk.update()
 
         if mouse_button_pressed[self.MouseKey.Left]:
             self.brush.paint(self.board, mouse_pos)
@@ -108,45 +101,66 @@ class Display:
                 if self.board[level, cell] is not None:
                     self.board[level, cell].on_update(self.board)
 
-    def update_chunk(self, chunk: Chunk) -> None:
+    def activate_chunks_round(self, i: int, j: int) -> None:
+        self.chunks[i, j].activate()
+
+        if 0 <= i - 1 < self.chunks.shape[0]:
+            self.chunks[i - 1, j].activate()
+        if 0 <= i + 1 < self.chunks.shape[0]:
+            self.chunks[i + 1, j].activate()
+        if 0 <= j - 1 < self.chunks.shape[1]:
+            self.chunks[i, j - 1].activate()
+        if 0 <= j + 1 < self.chunks.shape[1]:
+            self.chunks[i, j + 1].activate()
+
+    def on_update_chunk(self, chunk: Chunk) -> None:
+        activate_chunk = False
         for i in reversed(range(chunk.width)):
             for j in range(chunk.height):
                 cell = self.board[chunk.x + i, chunk.y + j]
                 if cell is not None:
                     have_moved = cell.on_update(self.board)
                     if have_moved:
-                        cell_chunk = Vec(cell.pos.y // self.chunk_size, cell.pos.x // self.chunk_size)
-                        self.chunks[cell_chunk.y, cell_chunk.x].activate()
+                        activate_chunk = True
+        if activate_chunk:
+            chunk_pos = Vec(chunk.y // self.chunk_size, chunk.x // self.chunk_size)
+            self.activate_chunks_round(chunk_pos.x, chunk_pos.y)
 
-                    cell.been_updated = True
-
-    @Timeit(log="[UPDATING]", max_time=True, min_time=True)
+    # @Timeit(log="[UPDATING]", max_time=True, min_time=True)
     def update(self) -> None:
-        # TODO: Fix Bug that not empty chunks above empty is not updating
         for chunk_row in reversed(self.chunks):
             for chunk in chunk_row:
-                if not chunk.is_active():
-                    continue
-                self.update_chunk(chunk)
-        for chunk_row in self.chunks:
-            for chunk in chunk_row:
-                chunk.update()
+                if chunk.is_active():
+                    self.on_update_chunk(chunk)
 
+    # @Timeit(log="[DRAWING]", max_time=True, min_time=True)
     def redraw(self) -> None:
-        for j, level in enumerate(self.board):
-            for i, cell in enumerate(level):
-                if cell is not None:
-                    self.surface.set_at((i, j), cell.color)
-                    cell.been_updated = False
-                else:
-                    self.surface.set_at((i, j), 0x00_00_00)
+        def draw_chunk():
+            for i in range(chunk.width):
+                for j in range(chunk.height):
+                    cell = self.board[chunk.x + i, chunk.y + j]
+                    if cell is not None:
+                        self.surface.set_at((chunk.y + j, chunk.x + i), cell.color)
+                        cell.reset()
+                    else:
+                        self.surface.set_at((chunk.y + j, chunk.x + i), 0x00_00_00)
+        for chunk_row in reversed(self.chunks):
+            for chunk in chunk_row:
+                if chunk.is_active():
+                    draw_chunk()
 
         surf = py.transform.scale(self.surface, (WX, WY))
         self.win.blit(surf, (0, 0))
 
+        if DEBUG:
+            for chunk_row in self.chunks:
+                for chunk in chunk_row:
+                    chunk.draw_debug_chunk(self.win)
+
+    def reset_chunks(self):
         for chunk_row in self.chunks:
             for chunk in chunk_row:
-                chunk.draw_debug_chunk(self.win)
+                chunk.update()
 
     def map_colors(self) -> None:
         data, offset_y, offset_x = convert.convert_img(WX, WY)
