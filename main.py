@@ -1,10 +1,6 @@
 import pygame as py
 from values import *
-from src.draw import (
-    Display,
-    WX, WY, FPS
-)
-from time import perf_counter
+from src.draw import Display
 # from cver.cdraw import Display
 
 
@@ -17,7 +13,7 @@ class SandSim:
 
         self.sim = True
         self.is_running = True
-    
+
     def run(self) -> None:
         while self.is_running:
             self.clock.tick(FPS)
@@ -29,12 +25,16 @@ class SandSim:
 
             self.display.paint_particles()
             self.display.redraw()
-            self.display.reset_chunks()
             self.display.draw_cursor()
+
+            if self.sim:
+                self.display.reset_chunks()
 
             py.display.flip()
 
             self.handle_events()
+
+            # print(self.clock.get_fps())
 
     def handle_events(self) -> None:
         for event in py.event.get():

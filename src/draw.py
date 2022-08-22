@@ -23,6 +23,7 @@ class Display:
         self.board = Board(BOARD_Y, BOARD_X)
         self.board[10, 50] = Sand(10, 50)
         self.brush = Brush(Sand)
+        self.last_mouse_position: Union[Vec, None] = None
 
         # Chunks
         self.chunk_size = 10  # 10 x 10
@@ -54,26 +55,29 @@ class Display:
         keys = py.key.get_pressed()
 
         mouse_pos = Vec(*py.mouse.get_pos())
-        chunk_pos = Vec(mouse_pos.x // self.chunk_threshold, mouse_pos.y // self.chunk_threshold)
-        mouse_chunk = self.chunks[chunk_pos.y, chunk_pos.x]
-        mouse_chunk.updated_this_frame = True
 
-        def activate_chunks_on_draw():
-            for chunk_row in self.chunks:
-                for chunk in chunk_row:
-                    if chunk_intersect_with_brush(chunk, self.brush, mouse_pos):
-                        chunk.activate()
+        def activate_chunk_on_draw():
+            if self.last_mouse_position is None:
+                self.last_mouse_position = mouse_pos
+            start_chunk_pos = Vec(self.last_mouse_position.x // self.chunk_threshold,
+                                  self.last_mouse_position.y // self.chunk_threshold)
+            end_chunk_pos = Vec(mouse_pos.x // self.chunk_threshold, mouse_pos.y // self.chunk_threshold)
+            for chunk_pos in interpolate_pos(start_chunk_pos, end_chunk_pos):
+                self.activate_chunks_around(chunk_pos.y, chunk_pos.x)
 
         if mouse_button_pressed[self.MouseKey.Left]:
             self.brush.paint(self.board, mouse_pos)
+            # pos = Vec(mouse_pos.x // SCALE, mouse_pos.y // SCALE)
+            # self.brush.paint_point(self.board, pos)
             # Activate chunks
-            activate_chunks_on_draw()
+            activate_chunk_on_draw()
         elif mouse_button_pressed[self.MouseKey.Right]:
             self.brush.erase(self.board, mouse_pos)
             # Activate chunks
-            activate_chunks_on_draw()
+            activate_chunk_on_draw()
         else:
-            self.brush.last_mouse_position = None
+            self.brush.last_mouse_on_board_position = None
+            self.last_mouse_position = None
 
         if keys[py.K_s]:
             self.brush.pen = Sand
@@ -101,17 +105,17 @@ class Display:
                 if self.board[level, cell] is not None:
                     self.board[level, cell].on_update(self.board)
 
-    def activate_chunks_round(self, i: int, j: int) -> None:
-        self.chunks[i, j].activate()
+    def activate_chunks_around(self, x: int, y: int) -> None:
+        self.chunks[x, y].activate()
 
-        if 0 <= i - 1 < self.chunks.shape[0]:
-            self.chunks[i - 1, j].activate()
-        if 0 <= i + 1 < self.chunks.shape[0]:
-            self.chunks[i + 1, j].activate()
-        if 0 <= j - 1 < self.chunks.shape[1]:
-            self.chunks[i, j - 1].activate()
-        if 0 <= j + 1 < self.chunks.shape[1]:
-            self.chunks[i, j + 1].activate()
+        if 0 <= x - 1 < self.chunks.shape[0]:
+            self.chunks[x - 1, y].activate()
+        if 0 <= x + 1 < self.chunks.shape[0]:
+            self.chunks[x + 1, y].activate()
+        if 0 <= y - 1 < self.chunks.shape[1]:
+            self.chunks[x, y - 1].activate()
+        if 0 <= y + 1 < self.chunks.shape[1]:
+            self.chunks[x, y + 1].activate()
 
     def on_update_chunk(self, chunk: Chunk) -> None:
         activate_chunk = False
@@ -124,7 +128,7 @@ class Display:
                         activate_chunk = True
         if activate_chunk:
             chunk_pos = Vec(chunk.y // self.chunk_size, chunk.x // self.chunk_size)
-            self.activate_chunks_round(chunk_pos.x, chunk_pos.y)
+            self.activate_chunks_around(chunk_pos.x, chunk_pos.y)
 
     # @Timeit(log="[UPDATING]", max_time=True, min_time=True)
     def update(self) -> None:
@@ -135,19 +139,13 @@ class Display:
 
     # @Timeit(log="[DRAWING]", max_time=True, min_time=True)
     def redraw(self) -> None:
-        def draw_chunk():
-            for i in range(chunk.width):
-                for j in range(chunk.height):
-                    cell = self.board[chunk.x + i, chunk.y + j]
-                    if cell is not None:
-                        self.surface.set_at((chunk.y + j, chunk.x + i), cell.color)
-                        cell.reset()
-                    else:
-                        self.surface.set_at((chunk.y + j, chunk.x + i), 0x00_00_00)
-        for chunk_row in reversed(self.chunks):
-            for chunk in chunk_row:
-                if chunk.is_active():
-                    draw_chunk()
+        for i, level in enumerate(self.board):
+            for j, cell in enumerate(level):
+                if cell is not None:
+                    self.surface.set_at((j, i), cell.color)
+                    cell.reset()
+                else:
+                    self.surface.set_at((j, i), 0x00_00_00)
 
         surf = py.transform.scale(self.surface, (WX, WY))
         self.win.blit(surf, (0, 0))
@@ -168,13 +166,21 @@ class Display:
         which_color = {"Sand": 0, "Water": 0, "Wood": 0, "Fire": 0, "Smoke": 0}
         color_obj = {"Sand": Sand, "Water": Water, "Wood": Wood, "Fire": Fire, "Smoke": Smoke}
 
+        def filter_color(c):
+            r = c >> 16 & 0xFF
+            g = c >> 8 & 0xFF
+            b = c >> 0 & 0xFF
+            return r * r + g * g + b * b
+
         for i, pixels in enumerate(data):
             for j, pixel in enumerate(pixels):
                 if not self.board.in_bounds(offset_y+i, offset_x+j):
                     return
+
+                pixel_val = (pixel[0] << 16) + (pixel[1] << 8) + pixel[2]
                 for color in COLORS:
-                    pos_difference = COLORS[color] - pixel[:3]
-                    which_color[color] = min(map(lambda v: v[0]*v[0] + v[1]*v[1] + v[2]*v[2], pos_difference))
+                    pos_difference = COLORS[color] - pixel_val
+                    which_color[color] = min(map(filter_color, pos_difference))
 
                 best_pixel = color_obj[min(which_color, key=which_color.get)]
                 self.board[offset_y+i][offset_x+j] = best_pixel(offset_y+i, offset_x+j)

@@ -33,10 +33,13 @@ class Particle:
         self.been_updated: bool = been_updated
 
         self.is_falling: bool = is_falling
+        self.friction = 0.0
+        self.inertial_resistance = 0.0
 
         self.pos: Vec = Vec(y, x)
+        self.vel: Vec = Vec()
 
-    def _step(self, board: Board, move: Vec) -> bool:
+    def _step(self, board: Board) -> bool:
         pass
 
     def on_update(self, board: Board) -> bool:
@@ -44,19 +47,7 @@ class Particle:
             return False
         self.been_updated = True
 
-        move = self.pos.copy()
-
-        for i in range(self.Iterations):
-            stop = self._step(board, move)
-            if not stop:
-                break
-            else:
-                self.has_been_modified = True
-
-        if move != self.pos:
-            board.swap(self, move.y, move.x)
-        else:
-            self.is_falling = False
+        self.has_been_modified = self._step(board)
 
         return self.has_been_modified
 
@@ -64,15 +55,18 @@ class Particle:
         self.been_updated = False
         self.has_been_modified = False
 
-    def push_neighbours(self, board: Board):
+    def push_neighbours(self, board: Board) -> None:
         if board.in_bounds(self.pos.y, self.pos.x - 1):
             left = board[self.pos.y, self.pos.x - 1]
             if left is not None and self.id() == left.id():
-                left.is_falling = True
+                if random.random() > left.inertial_resistance:
+                    left.is_falling = True
+
         if board.in_bounds(self.pos.y, self.pos.x + 1):
             right = board[self.pos.y, self.pos.x + 1]
             if right is not None and self.id() == right.id():
-                right.is_falling = True
+                if random.random() > right.inertial_resistance:
+                    right.is_falling = True
 
     @classmethod
     def id(cls) -> ParticleType:
@@ -94,30 +88,54 @@ class Sand(Particle):
     def __init__(self, y: int, x: int) -> None:
         super(Sand, self).__init__(y, x)
         self.color = random.choice(COLORS["Sand"])
-        self.friction = 0.75
 
-    def _step(self, board: Board, move: Vec) -> bool:
-        if board.in_bounds(move.y + 1, move.x) and self.is_valid(board[move.y + 1, move.x]):
+        self.friction = 0.9
+        self.inertial_resistance = 0.5
+
+        self.vel = Vec(3, 0)
+
+    def _step(self, board: Board) -> bool:
+        move = self.pos.copy()
+
+        if board.in_bounds(self.pos.y + 1, move.x) and self.is_valid(board[self.pos.y + 1, move.x]):
             self.is_falling = True
             move.y += 1
+            board.swap(self, move.y, move.x)
             self.push_neighbours(board)
             return True
 
-        if not self.is_falling:
-            return False
+        elif self.is_falling:
+            if random.random() > self.inertial_resistance:
+                self.is_falling = False
+                return False
 
-        d = -1 if random.randint(0, 1) else 1
-        if board.in_bounds(move.y + 1, move.x + d) and self.is_valid(board[move.y + 1, move.x + d]):
-            move.y += 1
-            move.x += d
-        elif board.in_bounds(move.y + 1, move.x - d) and self.is_valid(board[move.y + 1, move.x - d]):
-            move.y += 1
-            move.x -= d
-        else:
-            return False
+            d = -1 if random.randint(0, 1) else 1
+            if board.in_bounds(move.y + 1, move.x + d) and self.is_valid(board[move.y + 1, move.x + d]):
+                move.y += 1
+                move.x += d
+            elif board.in_bounds(move.y + 1, move.x - d) and self.is_valid(board[move.y + 1, move.x - d]):
+                move.y += 1
+                move.x -= d
+            else:
+                self.is_falling = False
+                self.vel = Vec(0, d)
+                return True
 
-        self.push_neighbours(board)
-        return True
+            board.swap(self, move.y, move.x)
+            self.push_neighbours(board)
+            return True
+
+        elif self.vel.x != 0:
+            d = round(self.vel.x)
+            if board.in_bounds(move.y, move.x + d) and self.is_valid(board[move.y, move.x + d]):
+                move.x += d
+                self.vel.x *= self.friction
+                board.swap(self, move.y, move.x)
+                return True
+            else:
+                self.vel.x = 0
+
+        return False
 
 
 class Water(Particle):
@@ -127,41 +145,47 @@ class Water(Particle):
         super(Water, self).__init__(y, x)
         self.color = random.choice(COLORS["Water"])
 
-    def _step(self, board: Board, move: Vec) -> bool:
+        self.vel = Vec(0, 3)
+
+    def _step(self, board: Board) -> bool:
+        state = False
+        move = self.pos.copy()
         if board.in_bounds(move.y + 1, move.x) and self.is_valid(board[move.y + 1, move.x]):
             move.y += 1
+            board.swap(self, move.y, move.x)
             return True
 
         d = -1 if random.randint(0, 1) else 1
         if board.in_bounds(move.y + 1, move.x + d) and self.is_valid(board[move.y + 1, move.x + d]):
             move.y += 1
             move.x += d
-            return True
+            state = True
 
-        if board.in_bounds(move.y + 1, move.x - d) and self.is_valid(board[move.y + 1, move.x - d]):
+        elif board.in_bounds(move.y + 1, move.x - d) and self.is_valid(board[move.y + 1, move.x - d]):
             move.y += 1
             move.x -= d
-            return True
+            state = True
 
-        if board.in_bounds(move.y + 1, move.x + d) and self.is_valid(board[move.y + 1, move.x + d]):
+        elif board.in_bounds(move.y + 1, move.x + d) and self.is_valid(board[move.y + 1, move.x + d]):
             move.y += 1
             move.x += d
-            return True
+            state = True
 
-        if board.in_bounds(move.y + 1, move.x - d) and self.is_valid(board[move.y + 1, move.x - d]):
+        elif board.in_bounds(move.y + 1, move.x - d) and self.is_valid(board[move.y + 1, move.x - d]):
             move.y += 1
             move.x -= d
-            return True
+            state = True
 
-        if board.in_bounds(move.y, move.x + d) and self.is_valid(board[move.y, move.x + d]):
+        elif board.in_bounds(move.y, move.x + d) and self.is_valid(board[move.y, move.x + d]):
             move.x += d
-            return True
+            state = True
 
-        if board.in_bounds(move.y, move.x - d) and self.is_valid(board[move.y, move.x - d]):
+        elif board.in_bounds(move.y, move.x - d) and self.is_valid(board[move.y, move.x - d]):
             move.x -= d
-            return True
+            state = True
 
-        return False
+        board.swap(self, move.y, move.x)
+        return state
 
 
 class Wood(Particle):
@@ -238,26 +262,30 @@ class Smoke(Particle):
         self.color = random.choice(COLORS["Smoke"])
         self.lifetime = random.randint(10, 80)
 
-    def _step(self, board: Board, move: Vec) -> bool:
+        self.vel = Vec(-1, 0)
+
+    def _step(self, board: Board) -> bool:
         if self.lifetime < 0:
             board[self.pos.y, self.pos.x] = None
             return False
         self.lifetime -= 1
+
+        move = self.pos.copy()
 
         if board.in_bounds(move.y - 1, move.x) and board[move.y - 1, move.x] is None:
             move.y -= 1
 
         d = random.randint(-1, 1)
         if not d:
+            board.swap(self, move.y, move.x)
             return True
 
-        if board.in_bounds(move.y - 1, move.x - d) and board[move.y - 1, move.x - d] is None:
-            move.y = move.y - 1
+        if board.in_bounds(move.y, move.x - d) and board[move.y, move.x - d] is None:
             move.x = move.x - d
-        elif board.in_bounds(move.y - 1, move.x + d) and board[move.y - 1, move.x + d] is None:
-            move.y = self.pos.y - 1
+        elif board.in_bounds(move.y, move.x + d) and board[move.y, move.x + d] is None:
             move.x = self.pos.x + d
 
+        board.swap(self, move.y, move.x)
         return True
 
 

@@ -71,7 +71,7 @@ class Brush:
         self._pen: Type[Particle] = pen
         self._pen_size: int = PAINT_SCALE
         self.PendDifference: int = self._pen_size
-        self.last_mouse_position: Union[Vec, None] = Vec()
+        self.last_mouse_on_board_position: Union[Vec, None] = Vec()
 
     @property
     def pen(self) -> Type[Particle]:
@@ -108,9 +108,9 @@ class Brush:
         pos.y //= SCALE
         pos.x //= SCALE
 
-        if self.last_mouse_position is None:
-            self.last_mouse_position = Vec(pos.y, pos.x)
-        slope = pos - self.last_mouse_position
+        if self.last_mouse_on_board_position is None:
+            self.last_mouse_on_board_position = pos.copy()
+        slope = pos - self.last_mouse_on_board_position
         length = pow(pow(slope.y, 2) + pow(slope.x, 2), 0.5)
         if length != 0:
             slope.y /= length
@@ -120,12 +120,12 @@ class Brush:
         for offset in range(-self.pen_size, self.pen_size):
             y = Vec(offset, 0)
             point_y = pos + y
-            last_point_y = self.last_mouse_position + y
+            last_point_y = self.last_mouse_on_board_position + y
             self.paint_from_to(board, last_point_y, point_y, slope)
 
             x = Vec(0, offset)
             point_x = pos + x
-            last_point_x = self.last_mouse_position + x
+            last_point_x = self.last_mouse_on_board_position + x
             self.paint_from_to(board, last_point_x, point_x, slope)
 
         # drawing a circle at the previous point and the current point
@@ -135,11 +135,11 @@ class Brush:
             for x in range(-offset, offset):
                 r_phi = Vec(y, x)
                 point = pos + r_phi
-                last_point = self.last_mouse_position + r_phi
+                last_point = self.last_mouse_on_board_position + r_phi
                 self.paint_point(board, point)
                 self.paint_point(board, last_point)
 
-        self.last_mouse_position = pos
+        self.last_mouse_on_board_position = pos
 
     def erase(self, board: Board, pos: Vec) -> None:
         pen = self.pen

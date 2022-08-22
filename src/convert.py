@@ -18,6 +18,6 @@ def convert_img(width: int, height: int) -> Union[Tuple[np.ndarray, int, int], N
     offset_y, offset_x = img.size
     offset_y = ((height//SCALE)-offset_y)//2
     offset_x = ((width//SCALE)-offset_x)//2
-    img = np.array(img)
+    img = np.asarray(img, dtype=np.uint32)
 
     return img, offset_y, offset_x
