@@ -1,4 +1,5 @@
 import copy
+import math
 from typing import Union
 
 
@@ -27,10 +28,13 @@ class Vec:
         self._x = value
 
     def __add__(self, other: 'Vec') -> 'Vec':
-        return Vec(self._y+other._y, self._x+other._x)
+        return Vec(self._y + other._y, self._x + other._x)
 
     def __sub__(self, other: 'Vec') -> 'Vec':
-        return Vec(self._y-other._y, self._x-other._x)
+        return Vec(self._y - other._y, self._x - other._x)
+
+    def __mul__(self, other: Union[int, float]) -> 'Vec':
+        return Vec(self._y * other, self._x * other)
 
     def __repr__(self) -> str:
         y = round(self._y, 2) if type(self._y) is float else self._y
@@ -49,8 +53,11 @@ class Vec:
     def round(self) -> 'Vec':
         return Vec(round(self._y), round(self._x))
 
+    def size(self) -> float:
+        return math.pow(self._y, 2) + math.pow(self._x, 2)
+
     def magnitude(self) -> float:
-        return pow(pow(self._y, 2) + pow(self._x, 2), 0.5)
+        return math.sqrt(self.size())
 
     def normalize(self) -> 'Vec':
         mag = self.magnitude()
@@ -60,16 +67,3 @@ class Vec:
 
     def copy(self) -> 'Vec':
         return copy.copy(self)
-
-
-def interpolate_pos(start: Vec, end: Vec, slope: Union[Vec, None] = None):
-    if slope is None:
-        slope = end - start
-        slope.normalize()
-
-    while True:
-        pos = start.round()
-        yield pos
-        if pos == end:
-            return
-        start += slope

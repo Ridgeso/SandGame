@@ -21,9 +21,11 @@ class Display:
 
         # Board
         self.board = Board(BOARD_Y, BOARD_X)
-        self.board[10, 50] = Sand(10, 50)
         self.brush = Brush(Sand)
         self.last_mouse_position: Union[Vec, None] = None
+
+        self.board[10, 50] = Sand(10, 50)
+        self.board[11, 50] = Sand(11, 50)
 
         # Chunks
         self.chunk_size = 10  # 10 x 10
@@ -66,13 +68,18 @@ class Display:
                 self.activate_chunks_around(chunk_pos.y, chunk_pos.x)
 
         if mouse_button_pressed[self.MouseKey.Left]:
-            self.brush.paint(self.board, mouse_pos)
-            # pos = Vec(mouse_pos.x // SCALE, mouse_pos.y // SCALE)
-            # self.brush.paint_point(self.board, pos)
+            # Draw Particles
+            # self.brush.paint(self.board, mouse_pos)
+            pos = Vec(mouse_pos.x // SCALE, mouse_pos.y // SCALE)
+            self.brush.paint_point(self.board, pos)
             # Activate chunks
             activate_chunk_on_draw()
         elif mouse_button_pressed[self.MouseKey.Right]:
-            self.brush.erase(self.board, mouse_pos)
+            # Erase Particles
+            pen = self.brush.pen
+            self.brush.pen = Eraser
+            self.brush.paint(self.board, mouse_pos)
+            self.brush.pen = pen
             # Activate chunks
             activate_chunk_on_draw()
         else:
@@ -118,26 +125,23 @@ class Display:
             self.chunks[x, y + 1].activate()
 
     def on_update_chunk(self, chunk: Chunk) -> None:
-        activate_chunk = False
         for i in reversed(range(chunk.width)):
             for j in range(chunk.height):
                 cell = self.board[chunk.x + i, chunk.y + j]
                 if cell is not None:
                     have_moved = cell.on_update(self.board)
                     if have_moved:
-                        activate_chunk = True
-        if activate_chunk:
-            chunk_pos = Vec(chunk.y // self.chunk_size, chunk.x // self.chunk_size)
-            self.activate_chunks_around(chunk_pos.x, chunk_pos.y)
+                        chunk_pos = Vec(cell.pos.x // self.chunk_size, cell.pos.y // self.chunk_size)
+                        self.activate_chunks_around(chunk_pos.x, chunk_pos.y)
 
-    # @Timeit(log="[UPDATING]", max_time=True, min_time=True)
+    # @Timeit(log="UPDATING", max_time=True, min_time=True)
     def update(self) -> None:
         for chunk_row in reversed(self.chunks):
             for chunk in chunk_row:
                 if chunk.is_active():
                     self.on_update_chunk(chunk)
 
-    # @Timeit(log="[DRAWING]", max_time=True, min_time=True)
+    # @Timeit(log="DRAWING", max_time=True, min_time=True)
     def redraw(self) -> None:
         for i, level in enumerate(self.board):
             for j, cell in enumerate(level):

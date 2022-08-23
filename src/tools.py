@@ -1,13 +1,14 @@
 from typing import Type, Callable
 from functools import wraps
 from time import perf_counter
+from math import sqrt
 
 import numpy as np
 import pygame as py
 
 from src.vec import *
-from src.particle import Particle, Eraser
 from values import *
+Particle = Type['Particle']
 
 
 class Chunk:
@@ -55,8 +56,6 @@ class Board(np.ndarray):
 
     def swap(self, cell: Particle, y: int, x: int) -> None:
         temp = self[cell.pos.y, cell.pos.x]
-        if temp is None:
-            breakpoint()
         self[cell.pos.y, cell.pos.x] = self[y, x]
         self[y, x] = temp
 
@@ -110,11 +109,7 @@ class Brush:
 
         if self.last_mouse_on_board_position is None:
             self.last_mouse_on_board_position = pos.copy()
-        slope = pos - self.last_mouse_on_board_position
-        length = pow(pow(slope.y, 2) + pow(slope.x, 2), 0.5)
-        if length != 0:
-            slope.y /= length
-            slope.x /= length
+        slope = (pos - self.last_mouse_on_board_position).normalize()
 
         # drawing cross that expends over the gap between the brush positions
         for offset in range(-self.pen_size, self.pen_size):
@@ -141,11 +136,12 @@ class Brush:
 
         self.last_mouse_on_board_position = pos
 
-    def erase(self, board: Board, pos: Vec) -> None:
-        pen = self.pen
-        self.pen = Eraser
-        self.paint(board, pos)
-        self.pen = pen
+    # TODO: Deal with circular import
+    # def erase(self, board: Board, pos: Vec) -> None:
+    #     pen = self.pen
+    #     self.pen = Eraser
+    #     self.paint(board, pos)
+    #     self.pen = pen
 
 
 def chunk_intersect_with_brush(chunk: Chunk, brush: Brush, brush_pos: Vec) -> bool:
@@ -161,18 +157,32 @@ def chunk_intersect_with_brush(chunk: Chunk, brush: Brush, brush_pos: Vec) -> bo
     near -= brush_pos
 
     # if distance is lower than brush radius we have an intersection
-    distance = pow(pow(near.y, 2) + pow(near.x, 2), 0.5)
+    distance = near.size()
 
-    if distance <= brush.pen_size:
+    if distance <= brush.pen_size**2:
         return True
 
     return False
 
 
+def interpolate_pos(start: Vec, end: Vec, slope: Union[Vec, None] = None):
+    if slope is None:
+        slope = end - start
+        length = slope.magnitude()
+        if length:
+            slope.y /= length
+            slope.x /= length
+    else:
+        length = (end - start).magnitude()
+
+    for i in range(math.floor(length) + 1):
+        yield start + (slope * i).round()
+
+
 # Debug
 class Timeit:
     def __init__(self, log: str = "", max_time: bool = False, min_time: bool = False) -> None:
-        self.log = log + " | AT [{}] | {:7.03f} ms"
+        self.log = f"[{log}] | AT"
 
         self.max_time = max_time
         self.min_time = min_time
@@ -181,6 +191,8 @@ class Timeit:
         self.min_time_spend = 1_000_000
 
     def __call__(self, f: Callable):
+        self.log += f"[{f.__name__}]" + " | {:7.03f} ms"
+
         @wraps(f)
         def wrapper(*args, **kwargs):
             # Function
@@ -190,7 +202,7 @@ class Timeit:
             end = 1000 * (end - start)
 
             # Logging
-            log = self.log.format(f.__name__, end)
+            log = self.log.format(end)
             if self.max_time:
                 self.max_time_spend = max(end, self.max_time_spend)
                 log += f" | Max {self.max_time_spend: 7.03f}"
