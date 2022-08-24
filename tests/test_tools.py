@@ -2,12 +2,14 @@ import time
 import pytest
 from src.tools import *
 
-MAX_TIME = 1
+MAX_TIME = 3
 
 
 @pytest.fixture
 def start():
     return (
+        Vec(0, 0),
+        Vec(0, 0),
         Vec(0, 0),
         Vec(0, 0),
         Vec(0, 0),
@@ -25,7 +27,9 @@ def end():
         Vec(5, 5),
         Vec(5, 1),
         Vec(0, 0),
-        Vec(0.5, 0.1)
+        Vec(0.5, 0.1),
+        Vec(7, 7),
+        Vec(0.1, 124)
     )
 
 
@@ -37,6 +41,8 @@ def test_interpolate_pos(start, end):
 
         start = time.perf_counter()
         for pos in direction:
-            assert time.perf_counter() - start < MAX_TIME, TimeoutError(f"Infinity loop for [{s, e}]")
+            assert time.perf_counter() - start < MAX_TIME, TimeoutError(f"Infinity loop")
             last_pos = pos
-        assert last_pos == e.round()
+
+        # assert round(last_pos.magnitude()) == round(e.magnitude()), ValueError("Destination not reached")
+        assert last_pos == e.round(), ValueError("Destination not reached")

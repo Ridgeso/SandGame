@@ -1,4 +1,5 @@
-from typing import Type, Callable
+import math
+from typing import Type, Callable, Iterator
 from functools import wraps
 from time import perf_counter
 from math import sqrt
@@ -165,7 +166,7 @@ def chunk_intersect_with_brush(chunk: Chunk, brush: Brush, brush_pos: Vec) -> bo
     return False
 
 
-def interpolate_pos(start: Vec, end: Vec, slope: Union[Vec, None] = None):
+def interpolate_pos(start: Vec, end: Vec, slope: Union[Vec, None] = None) -> Iterator[Vec]:
     if slope is None:
         slope = end - start
         length = slope.magnitude()
@@ -175,7 +176,16 @@ def interpolate_pos(start: Vec, end: Vec, slope: Union[Vec, None] = None):
     else:
         length = (end - start).magnitude()
 
-    for i in range(math.floor(length) + 1):
+    # r_l = round(length) + 1
+    # i = 0
+    # while i <= r_l:
+    #     pos = (start + slope * i).round()
+    #     yield pos
+    #     if pos == end:
+    #         return
+    #     i += 1
+
+    for i in range(round(length) + 1):
         yield start + (slope * i).round()
 
 

@@ -25,7 +25,7 @@ class Display:
         self.last_mouse_position: Union[Vec, None] = None
 
         self.board[10, 50] = Sand(10, 50)
-        self.board[11, 50] = Sand(11, 50)
+        # self.board[11, 50] = Sand(11, 50)
 
         # Chunks
         self.chunk_size = 10  # 10 x 10
@@ -53,10 +53,9 @@ class Display:
         Right: int = auto()
 
     def paint_particles(self) -> None:
-        mouse_button_pressed = py.mouse.get_pressed(num_buttons=3)
-        keys = py.key.get_pressed()
-
         mouse_pos = Vec(*py.mouse.get_pos())
+        mouse_button_pressed = py.mouse.get_pressed(num_buttons=3)
+        keys_pressed = py.key.get_pressed()
 
         def activate_chunk_on_draw():
             if self.last_mouse_position is None:
@@ -66,6 +65,7 @@ class Display:
             end_chunk_pos = Vec(mouse_pos.x // self.chunk_threshold, mouse_pos.y // self.chunk_threshold)
             for chunk_pos in interpolate_pos(start_chunk_pos, end_chunk_pos):
                 self.activate_chunks_around(chunk_pos.y, chunk_pos.x)
+            self.last_mouse_position = mouse_pos
 
         if mouse_button_pressed[self.MouseKey.Left]:
             # Draw Particles
@@ -76,25 +76,25 @@ class Display:
             activate_chunk_on_draw()
         elif mouse_button_pressed[self.MouseKey.Right]:
             # Erase Particles
-            pen = self.brush.pen
+            temp_pen = self.brush.pen
             self.brush.pen = Eraser
             self.brush.paint(self.board, mouse_pos)
-            self.brush.pen = pen
+            self.brush.pen = temp_pen
             # Activate chunks
             activate_chunk_on_draw()
         else:
             self.brush.last_mouse_on_board_position = None
             self.last_mouse_position = None
 
-        if keys[py.K_s]:
+        if keys_pressed[py.K_s]:
             self.brush.pen = Sand
-        elif keys[py.K_q]:
+        elif keys_pressed[py.K_q]:
             self.brush.pen = Wood
-        elif keys[py.K_w]:
+        elif keys_pressed[py.K_w]:
             self.brush.pen = Water
-        elif keys[py.K_e]:
+        elif keys_pressed[py.K_e]:
             self.brush.pen = Fire
-        elif keys[py.K_r]:
+        elif keys_pressed[py.K_r]:
             self.brush.pen = Smoke
 
     def resize_cursor(self, value: int) -> None:
@@ -136,10 +136,14 @@ class Display:
 
     # @Timeit(log="UPDATING", max_time=True, min_time=True)
     def update(self) -> None:
-        for chunk_row in reversed(self.chunks):
-            for chunk in chunk_row:
-                if chunk.is_active():
-                    self.on_update_chunk(chunk)
+        for level in self.board:
+            for cell in level:
+                if cell is not None:
+                    cell.on_update(self.board)
+        # for chunk_row in reversed(self.chunks):
+        #     for chunk in chunk_row:
+        #         if chunk.is_active():
+        #             self.on_update_chunk(chunk)
 
     # @Timeit(log="DRAWING", max_time=True, min_time=True)
     def redraw(self) -> None:
