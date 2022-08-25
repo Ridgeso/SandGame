@@ -1,69 +1,70 @@
-import copy
-import math
-from typing import Union
+from typing import Union, Optional
+import numpy as np
 
 
 class Vec:
-    def __init__(self, y: Union[int, float] = 0, x: Union[int, float] = 0) -> None:
-        self._y: Union[int, float] = y
-        self._x: Union[int, float] = x
+    def __init__(self, y: Union[np.ndarray, int, float] = 0, x: Optional[Union[int, float]] = 0) -> None:
+        if isinstance(y, np.ndarray):
+            self._v = y
+        else:
+            self._v: np.ndarray = np.array([y, x])
 
     def is_zero(self) -> bool:
-        return self._y == 0 and self._x == 0
+        return self._v == np.zeros((2,))
 
     @property
     def y(self) -> Union[int, float]:
-        return self._y
+        return self._v[0]
 
     @y.setter
     def y(self, value: Union[int, float]) -> None:
-        self._y = value
+        self._v[0] = value
 
     @property
     def x(self) -> Union[int, float]:
-        return self._x
+        return self._v[1]
 
     @x.setter
     def x(self, value: Union[int, float]) -> None:
-        self._x = value
+        self._v[1] = value
 
     def __add__(self, other: 'Vec') -> 'Vec':
-        return Vec(self._y + other._y, self._x + other._x)
+        return Vec(self._v + other._v)
 
     def __sub__(self, other: 'Vec') -> 'Vec':
-        return Vec(self._y - other._y, self._x - other._x)
+        return Vec(self._v - other._v)
 
     def __mul__(self, other: Union[int, float]) -> 'Vec':
-        return Vec(self._y * other, self._x * other)
+        return Vec(self._v * other)
 
     def __repr__(self) -> str:
-        y = round(self._y, 2) if type(self._y) is float else self._y
-        x = round(self._x, 2) if type(self._x) is float else self._x
+        y = round(self._v[0], 2) if self._v[0].dtype is np.float_ else self._v[0]
+        x = round(self._v[1], 2) if self._v[1].dtype is np.float_ else self._v[1]
         return f'Vec(y:{y},x:{x})'
 
     def __eq__(self, other: 'Vec') -> bool:
-        return self._y == other._y and self._x == other._x
+        return np.array_equal(self._v, other._v)
 
     def __ne__(self, other: 'Vec') -> bool:
         return not self == other
 
     def __hash__(self) -> int:
-        return hash((self._x, self._y))
+        return hash((self._v[0], self._v[1]))
 
     def round(self) -> 'Vec':
-        return Vec(round(self._y), round(self._x))
+        return Vec(np.around(self._v).astype(np.int_))
 
     def size(self) -> float:
-        return math.pow(self._y, 2) + math.pow(self._x, 2)
+        return self._v.dot(self._v)
 
     def magnitude(self) -> float:
-        return math.sqrt(self.size())
+        return np.sqrt(self.size())
 
     def normalize(self) -> 'Vec':
         mag = self.magnitude()
         if mag:
-            return Vec(self._y/mag, self._x/mag)
+            return Vec(self._v / mag)
         return Vec()
 
     def copy(self) -> 'Vec':
-        return copy.copy(self)
+        return Vec(self._v.copy())

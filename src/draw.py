@@ -4,6 +4,7 @@ from enum import IntEnum
 import pygame as py
 import numpy as np
 
+import values
 from src import convert
 from src.particle import *
 from src.tools import *
@@ -136,14 +137,14 @@ class Display:
 
     # @Timeit(log="UPDATING", max_time=True, min_time=True)
     def update(self) -> None:
-        for level in self.board:
-            for cell in level:
-                if cell is not None:
-                    cell.on_update(self.board)
-        # for chunk_row in reversed(self.chunks):
-        #     for chunk in chunk_row:
-        #         if chunk.is_active():
-        #             self.on_update_chunk(chunk)
+        # for level in self.board:
+        #     for cell in level:
+        #         if cell is not None:
+        #             cell.on_update(self.board)
+        for chunk_row in reversed(self.chunks):
+            for chunk in chunk_row:
+                if chunk.is_active():
+                    self.on_update_chunk(chunk)
 
     # @Timeit(log="DRAWING", max_time=True, min_time=True)
     def redraw(self) -> None:

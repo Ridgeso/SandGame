@@ -35,6 +35,7 @@ class SandSim:
             self.handle_events()
 
             # print(self.clock.get_fps())
+            py.display.set_caption(f"Sand Game | FPS {self.clock.get_fps()}")
 
     def handle_events(self) -> None:
         for event in py.event.get():

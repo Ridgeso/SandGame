@@ -1,7 +1,7 @@
-import math
 from typing import Type, Set, Union
 from enum import Enum, auto
 import random
+import math
 
 import pygame as py
 
@@ -36,15 +36,15 @@ class Particle:
 
         self.color: int = 0
         self.pos: Vec = Vec(y, x)
-        self.vel: Vec = Vec()
+        self.vel: Vec = Vec(0., 0.)
 
         self.lifetime: float = 0.0
         self.flammable: float = 100.0
         self.heat: float = 0.0
-        self.friction = 1.0
-        self.inertial_resistance = 1.0
-        self.bounciness = 1.0
-        self.mass = 0.0
+        self.friction: float = 1.0
+        self.inertial_resistance: float = 1.0
+        self.bounciness: float = 1.0
+        self.mass: float = 0.0
 
     def _step(self, board: Board) -> bool:
         pass
@@ -92,6 +92,14 @@ class Particle:
             return False
         return self.pos.x == other.pos.x and self.pos.y == other.pos.y
 
+    @staticmethod
+    def _round_shift(v: float) -> float:
+        if v < -0.1:
+            return math.floor(v)
+        elif v > 0.1:
+            return math.ceil(v)
+        return 0
+
 
 class Sand(Particle):
     priority = {ParticleType.Wood}
@@ -100,10 +108,10 @@ class Sand(Particle):
         super(Sand, self).__init__(y, x)
         self.color = random.choice(COLORS["Sand"])
 
-        self.vel = Vec(0, 0)
+        self.vel = Vec(0., 0.)
 
         self.friction = 0.9
-        self.inertial_resistance = 0.1
+        self.inertial_resistance = 0.4
         self.bounciness = 1
         self.mass = 0.2
 
@@ -112,13 +120,13 @@ class Sand(Particle):
 
         self.vel.y += GRAVITY
         if self.is_falling:
-            self.vel.x *= 0.6
+            self.vel.x *= 0.9
 
         target_position = self.pos + self.vel
-        iterate_direction = interpolate_pos(self.pos, target_position)
-        next(iterate_direction)  # skipping current position
+        direction = interpolate_pos(self.pos, target_position)
+        next(direction)  # skipping current position
 
-        for i, pos in enumerate(iterate_direction):
+        for i, pos in enumerate(direction):
             if i > 5:
                 break
             if not board.in_bounds(pos.y, pos.x):
@@ -134,29 +142,37 @@ class Sand(Particle):
                 if self.is_falling:
                     on_hit_vel = max(self.vel.y * self.bounciness, 4)
                     self.vel.x = on_hit_vel if self.vel.x > 0 else -on_hit_vel
-                else:
-                    self.vel.y = 0
 
                 if neighbor is None:
                     neighbor = Wood(0, 0)
 
                 self.vel.x *= self.friction * neighbor.friction
                 norm_vel = self.vel.normalize()
+                norm_vel_i = Vec(self._round_shift(norm_vel.y),
+                                 self._round_shift(norm_vel.x))
 
-                diagonal_neigh_pos = pos + Vec(1, -1 if norm_vel.x < 0 else 1)
+                if i == 0:
+                    if neighbor.vel.y > GRAVITY * 5:
+                        self.vel.y = GRAVITY * 5
+                    else:
+                        self.vel.y = (self.vel.y + neighbor.vel.y) / 2
+                else:
+                    self.vel.y = GRAVITY * 5
+
+                # diagonal_neigh_pos = pos + Vec(1, -1 if norm_vel.x < 0. else 1)
+                diagonal_neigh_pos = pos + norm_vel_i
                 if board.in_bounds(diagonal_neigh_pos.y, diagonal_neigh_pos.x):
                     diagonal_neigh = board[diagonal_neigh_pos.y, diagonal_neigh_pos.x]
+                    # Todo: It needs to grow XD
 
-                next_to_neigh_pos = pos + Vec(0, -1 if norm_vel.x < 0 else 1)
+                next_to_neigh_pos = pos + Vec(0, norm_vel_i.x)
                 if board.in_bounds(next_to_neigh_pos.y, next_to_neigh_pos.x):
                     next_to_neigh = board[next_to_neigh_pos.y, next_to_neigh_pos.x]
                     if self.is_valid(next_to_neigh):
                         self.vel.x *= -1
 
-
                 self.is_falling = False
                 break
-
 
         # if board.in_bounds(move.y + 1, move.x) and self.is_valid(board[move.y + 1, move.x]):
         #     self.is_falling = True
@@ -206,7 +222,7 @@ class Water(Particle):
         super(Water, self).__init__(y, x)
         self.color = random.choice(COLORS["Water"])
 
-        self.vel = Vec(0, 3)
+        self.vel = Vec(0., 3.)
 
     def _step(self, board: Board) -> bool:
         state = False
@@ -324,7 +340,7 @@ class Smoke(Particle):
         self.color = random.choice(COLORS["Smoke"])
         self.lifetime = random.randint(10, 80)
 
-        self.vel = Vec(-1, 0)
+        self.vel = Vec(-1., 0.)
 
     def _step(self, board: Board) -> bool:
         if self.lifetime < 0:
