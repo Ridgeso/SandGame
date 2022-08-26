@@ -1,5 +1,5 @@
 import math
-from typing import Type, Callable, Iterator
+from typing import Type, Callable, Iterator, Optional
 from functools import wraps
 from time import perf_counter
 from math import sqrt
@@ -50,20 +50,19 @@ class Chunk:
 
 class Board(np.ndarray):
     def __new__(cls, y: int, x: int) -> 'Board':
-        return super().__new__(cls, (y, x), dtype=object)
+        return super(Board, cls).__new__(cls, (y, x), dtype=object)
 
     def in_bounds(self, y: int, x: int) -> bool:
         return 0 <= y < self.shape[0] and 0 <= x < self.shape[1]
 
     def swap(self, cell: Particle, y: int, x: int) -> None:
-        temp = self[cell.pos.y, cell.pos.x]
         self[cell.pos.y, cell.pos.x] = self[y, x]
-        self[y, x] = temp
+        self[y, x] = cell
 
         if self[cell.pos.y, cell.pos.x] is not None:
             self[cell.pos.y, cell.pos.x].pos = cell.pos
 
-        self[y, x].pos = Vec(y, x)
+        cell.pos = Vec(y, x)
 
 
 class Brush:
@@ -166,9 +165,9 @@ def chunk_intersect_with_brush(chunk: Chunk, brush: Brush, brush_pos: Vec) -> bo
     return False
 
 
-def interpolate_pos(start: Vec, end: Vec, slope: Union[Vec, None] = None) -> Iterator[Vec]:
+def interpolate_pos(start: Vec, end: Vec, slope: Optional[Vec] = None) -> Iterator[Vec]:
     if slope is None:
-        slope = end - start
+        slope = (end - start).to_float()
         length = slope.magnitude()
         if length:
             slope.y /= length
@@ -187,6 +186,59 @@ def interpolate_pos(start: Vec, end: Vec, slope: Union[Vec, None] = None) -> Ite
 
     for i in range(round(length) + 1):
         yield start + (slope * i).round()
+
+
+def interpolate_pos_dda(start: Vec, end: Vec, slope: Optional[Vec] = None) -> Iterator[Vec]:
+    """
+    Generate position vector for each cell along the path
+    :param start: Starting cell
+    :param end: Target Cell
+    :param slope: unit slope vector
+    :returns: Vec
+    """
+
+    if slope is None:
+        slope = (end - start).normalize()
+
+    # Moving through cells
+    if slope.y == 0.:
+        cell_d_y = 0
+    else:
+        cell_d_y = 1 if slope.y > 0. else -1
+    if slope.x == 0.:
+        cell_d_x = 0
+    else:
+        cell_d_x = 1 if slope.x > 0. else -1
+
+    cell_direction = Vec(cell_d_y, cell_d_x)
+
+    # Moving through plane
+    unit_distance = Vec(Vec(1, slope.x/slope.y).magnitude(),  # dx for 1y
+                        Vec(1, slope.y/slope.x).magnitude())  # dy for 1x
+
+    distance_traveled = 0
+    whole_distance = (end - start).magnitude()
+    current_cell = start.round()
+
+    yield start
+
+    distances = unit_distance.copy()
+    while distance_traveled < whole_distance:
+        if distances.y < distances.x:
+            distance_traveled = distances.y
+            current_cell.y += cell_direction.y
+            distances.y += unit_distance.y
+        else:
+            distance_traveled = distances.x
+            current_cell.x += cell_direction.x
+            distances.x += unit_distance.x
+
+        yield current_cell
+
+    if current_cell != end:
+        yield current_cell + (end - current_cell).round()
+    # if current_cell != end:
+    #     yield end.round()
 
 
 # Debug

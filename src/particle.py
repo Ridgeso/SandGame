@@ -110,9 +110,9 @@ class Sand(Particle):
 
         self.vel = Vec(0., 0.)
 
-        self.friction = 0.9
-        self.inertial_resistance = 0.4
-        self.bounciness = 1
+        self.friction = 0.7
+        self.inertial_resistance = 0.1
+        self.bounciness = 0.2
         self.mass = 0.2
 
     def _step(self, board: Board) -> bool:
@@ -120,59 +120,60 @@ class Sand(Particle):
 
         self.vel.y += GRAVITY
         if self.is_falling:
-            self.vel.x *= 0.9
+            self.vel.x *= AIR_FRICTION
 
         target_position = self.pos + self.vel
         direction = interpolate_pos(self.pos, target_position)
         next(direction)  # skipping current position
 
-        for i, pos in enumerate(direction):
-            if i > 5:
-                break
+        for pos in direction:
             if not board.in_bounds(pos.y, pos.x):
                 break
 
             neighbor = board[pos.y, pos.x]
             if self.is_valid(neighbor):
-                self.is_falling = True
+                # self.is_falling = True
                 move = pos
                 self.push_neighbours(board, move)
 
-            else:
-                if self.is_falling:
-                    on_hit_vel = max(self.vel.y * self.bounciness, 4)
-                    self.vel.x = on_hit_vel if self.vel.x > 0 else -on_hit_vel
-
-                if neighbor is None:
-                    neighbor = Wood(0, 0)
-
-                self.vel.x *= self.friction * neighbor.friction
-                norm_vel = self.vel.normalize()
-                norm_vel_i = Vec(self._round_shift(norm_vel.y),
-                                 self._round_shift(norm_vel.x))
-
-                if i == 0:
-                    if neighbor.vel.y > GRAVITY * 5:
-                        self.vel.y = GRAVITY * 5
-                    else:
-                        self.vel.y = (self.vel.y + neighbor.vel.y) / 2
+            elif self.is_falling:
+                d = -1 if random.randint(0, 1) else 1
+                vel_on_hit = max(self.vel.y * self.bounciness, 2) * d
+                if board.in_bounds(pos.y, pos.x + d) and self.is_valid(board[pos.y, pos.x + d]):
+                    move = pos
+                    move.x += d
+                elif board.in_bounds(pos.y, pos.x - d) and self.is_valid(board[pos.y, pos.x - d]):
+                    move = pos
+                    move.x -= d
                 else:
-                    self.vel.y = GRAVITY * 5
+                    self.is_falling = False
+                    print("B", self.vel)
+                    self.vel.x = vel_on_hit
+                    # self.vel = Vec(0, vel_on_hit)
+                    print("A", self.vel)
+            else:
+                self.vel.x *= self.friction * neighbor.friction
 
-                # diagonal_neigh_pos = pos + Vec(1, -1 if norm_vel.x < 0. else 1)
-                diagonal_neigh_pos = pos + norm_vel_i
-                if board.in_bounds(diagonal_neigh_pos.y, diagonal_neigh_pos.x):
-                    diagonal_neigh = board[diagonal_neigh_pos.y, diagonal_neigh_pos.x]
-                    # Todo: It needs to grow XD
-
-                next_to_neigh_pos = pos + Vec(0, norm_vel_i.x)
-                if board.in_bounds(next_to_neigh_pos.y, next_to_neigh_pos.x):
-                    next_to_neigh = board[next_to_neigh_pos.y, next_to_neigh_pos.x]
-                    if self.is_valid(next_to_neigh):
-                        self.vel.x *= -1
-
-                self.is_falling = False
+                self.push_neighbours(board, move)
                 break
+
+        # elif self.vel.x != 0:
+        # if self.vel.x != 0:
+        #     # d = round(self.vel.x)
+        #     d = self.vel.round()
+        #     new_dir = interpolate_pos(move, move + d)
+        #     next(new_dir)
+        #     for pos in new_dir:
+        #         # if board.in_bounds(move.y, move.x + d) and self.is_valid(board[move.y, move.x + d]):
+        #         if board.in_bounds(pos.y, pos.x) and self.is_valid(board[pos.y, pos.x]):
+        #             # move.x += d
+        #             move = pos
+        #             self.vel.x *= self.friction
+        #             # board.swap(self, move.y, move.x)
+        #             # return True
+        #         else:
+        #             self.vel.x = 0
+        #             break
 
         # if board.in_bounds(move.y + 1, move.x) and self.is_valid(board[move.y + 1, move.x]):
         #     self.is_falling = True
@@ -207,6 +208,9 @@ class Sand(Particle):
         #         return True
         #     else:
         #         self.vel.x = 0
+
+        if board[move.y, move.x] is None:
+            self.is_falling = True
 
         if move == self.pos:
             return False

@@ -38,8 +38,8 @@ class Vec:
         return Vec(self._v * other)
 
     def __repr__(self) -> str:
-        y = round(self._v[0], 2) if self._v[0].dtype is np.float_ else self._v[0]
-        x = round(self._v[1], 2) if self._v[1].dtype is np.float_ else self._v[1]
+        y = round(self._v[0], 2) if self._v[0].dtype == np.float_ else self._v[0]
+        x = round(self._v[1], 2) if self._v[1].dtype == np.float_ else self._v[1]
         return f'Vec(y:{y},x:{x})'
 
     def __eq__(self, other: 'Vec') -> bool:
@@ -65,6 +65,16 @@ class Vec:
         if mag:
             return Vec(self._v / mag)
         return Vec()
+
+    def to_float(self) -> 'Vec':
+        if self._v.dtype == np.float_:
+            return self.copy()
+        return Vec(self._v.astype(np.float_))
+
+    def to_int(self) -> 'Vec':
+        if self._v.dtype == np.int_:
+            return self.copy()
+        return Vec(self._v.astype(np.int_))
 
     def copy(self) -> 'Vec':
         return Vec(self._v.copy())

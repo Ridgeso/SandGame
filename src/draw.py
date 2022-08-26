@@ -25,7 +25,8 @@ class Display:
         self.brush = Brush(Sand)
         self.last_mouse_position: Union[Vec, None] = None
 
-        self.board[10, 50] = Sand(10, 50)
+        # self.board[10, 50] = Sand(10, 50)
+        self.board[10, 20] = Sand(10, 20)
         # self.board[11, 50] = Sand(11, 50)
 
         # Chunks
