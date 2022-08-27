@@ -16,7 +16,7 @@ def start():
         Vec(0, 0),
         Vec(0, 0),
         Vec(0, 0),
-        Vec(0, 0)
+        Vec(0, 0),
     )
 
 
@@ -30,7 +30,7 @@ def end():
         Vec(0, 0),
         # Vec(0.5, 0.1),
         Vec(7, 7),
-        Vec(0.1, 124)
+        Vec(0.1, 124),
     )
 
 
@@ -51,7 +51,6 @@ def test_interpolate_pos(start: Iterator[Vec], end: Iterator[Vec]) -> None:
 
 def test_interpolate_pos_dda(start: Iterator[Vec], end: Iterator[Vec]) -> None:
     for s, e in zip(start, end):
-        print(s, e)
         last_pos = None
 
         direction = interpolate_pos_dda(s, e)

@@ -1,8 +1,6 @@
-import math
 from typing import Type, Callable, Iterator, Optional
 from functools import wraps
 from time import perf_counter
-from math import sqrt
 
 import numpy as np
 import pygame as py
@@ -175,15 +173,6 @@ def interpolate_pos(start: Vec, end: Vec, slope: Optional[Vec] = None) -> Iterat
     else:
         length = (end - start).magnitude()
 
-    # r_l = round(length) + 1
-    # i = 0
-    # while i <= r_l:
-    #     pos = (start + slope * i).round()
-    #     yield pos
-    #     if pos == end:
-    #         return
-    #     i += 1
-
     for i in range(round(length) + 1):
         yield start + (slope * i).round()
 
@@ -201,44 +190,28 @@ def interpolate_pos_dda(start: Vec, end: Vec, slope: Optional[Vec] = None) -> It
         slope = (end - start).normalize()
 
     # Moving through cells
-    if slope.y == 0.:
-        cell_d_y = 0
-    else:
-        cell_d_y = 1 if slope.y > 0. else -1
-    if slope.x == 0.:
-        cell_d_x = 0
-    else:
-        cell_d_x = 1 if slope.x > 0. else -1
-
-    cell_direction = Vec(cell_d_y, cell_d_x)
+    cell_direction = Vec(1 if slope.y > 0. else -1,
+                         1 if slope.x > 0. else -1)
 
     # Moving through plane
     unit_distance = Vec(Vec(1, slope.x/slope.y).magnitude(),  # dx for 1y
                         Vec(1, slope.y/slope.x).magnitude())  # dy for 1x
 
-    distance_traveled = 0
-    whole_distance = (end - start).magnitude()
+    # 1st position
+    yield start.copy()
+
     current_cell = start.round()
-
-    yield start
-
+    end = end.round()
     distances = unit_distance.copy()
-    while distance_traveled < whole_distance:
+    while current_cell != end:
         if distances.y < distances.x:
-            distance_traveled = distances.y
             current_cell.y += cell_direction.y
             distances.y += unit_distance.y
         else:
-            distance_traveled = distances.x
             current_cell.x += cell_direction.x
             distances.x += unit_distance.x
 
-        yield current_cell
-
-    if current_cell != end:
-        yield current_cell + (end - current_cell).round()
-    # if current_cell != end:
-    #     yield end.round()
+        yield current_cell.copy()
 
 
 # Debug

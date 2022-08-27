@@ -71,9 +71,9 @@ class Display:
 
         if mouse_button_pressed[self.MouseKey.Left]:
             # Draw Particles
-            # self.brush.paint(self.board, mouse_pos)
-            pos = Vec(mouse_pos.x // SCALE, mouse_pos.y // SCALE)
-            self.brush.paint_point(self.board, pos)
+            self.brush.paint(self.board, mouse_pos)
+            # pos = Vec(mouse_pos.x // SCALE, mouse_pos.y // SCALE)
+            # self.brush.paint_point(self.board, pos)
             # Activate chunks
             activate_chunk_on_draw()
         elif mouse_button_pressed[self.MouseKey.Right]:
