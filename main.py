@@ -18,8 +18,6 @@ class SandSim:
         while self.is_running:
             self.clock.tick(FPS)
 
-            self.display.fill((0, 0, 0))
-
             if self.sim:
                 self.display.update()
 

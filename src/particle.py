@@ -1,19 +1,17 @@
-from typing import Type, Set, Union, Optional
+from typing import Set, Optional
 from enum import Enum, auto
 import random
 import math
 
-import pygame as py
-
-from src.tools import interpolate_pos_dda, Board
+import src.tools as tools
 from src.vec import Vec
 from values import *
 
 
-# class StateOfAggregation(Enum):
-#     Gas: int = 0
-#     Liquid: int = auto()
-#     Solid: int = auto()
+class StateOfAggregation(Enum):
+    Gas: int = 0
+    Liquid: int = auto()
+    Solid: int = auto()
 
 
 class ParticleType(Enum):
@@ -28,7 +26,7 @@ class ParticleType(Enum):
 
 class Particle:
     priority: Set[ParticleType] = set()
-    Iterations: int = 3
+    state: StateOfAggregation = None
 
     def __init__(self, y: int, x: int, is_falling: bool = True, been_updated: bool = False) -> None:
         self.been_updated: bool = been_updated
@@ -44,12 +42,14 @@ class Particle:
         self.friction: float = 1.0
         self.inertial_resistance: float = 1.0
         self.bounciness: float = 1.0
+        self.density: float = 0.0
+        self.dispersion: int = 0
         self.mass: float = 0.0
 
-    def _step(self, board: Board) -> bool:
+    def _step(self, board: tools.Board) -> bool:
         pass
 
-    def on_update(self, board: Board) -> bool:
+    def on_update(self, board: tools.Board) -> bool:
         if self.been_updated:
             return False
         self.been_updated = True
@@ -61,7 +61,7 @@ class Particle:
     def reset(self) -> None:
         self.been_updated = False
 
-    def push_neighbours(self, board: Board, from_location: Vec) -> None:
+    def push_neighbours(self, board: tools.Board, from_location: Vec) -> None:
         if board.in_bounds(from_location.y, from_location.x - 1):
             left = board[from_location.y, from_location.x - 1]
             if left is not None and self.id() == left.id():
@@ -103,6 +103,7 @@ class Particle:
 
 class Sand(Particle):
     priority = {ParticleType.Wood}
+    state = StateOfAggregation.Solid
 
     def __init__(self, y: int, x: int) -> None:
         super(Sand, self).__init__(y, x)
@@ -113,17 +114,17 @@ class Sand(Particle):
         self.friction = 0.75
         self.inertial_resistance = 0.5
         self.bounciness = 0.5
-        self.mass = 0.2
+        self.mass = 54.0
 
-    def _step(self, board: Board) -> bool:
+    def _step(self, board: tools.Board) -> bool:
         move = self.pos.copy()
 
         self.vel.y += GRAVITY
         if self.is_falling:
             self.vel.x *= AIR_FRICTION
 
-        target_position = self.pos + self.vel
-        direction = interpolate_pos_dda(self.pos, target_position)
+        target_position = (self.pos + self.vel).round()
+        direction = tools.interpolate_pos_dda(self.pos, target_position)
         next(direction)  # skipping current position
 
         for pos in direction:
@@ -187,84 +188,9 @@ class Sand(Particle):
                 self.is_falling = False
                 break
         else:
-            neighbor = board[int(target_position.y), int(target_position.x)]
+            neighbor = board[target_position.y, target_position.x]
             if self.is_valid(neighbor):
                 self.is_falling = True
-
-            # elif self.is_falling:
-            #     d = -1 if random.randint(0, 1) else 1
-            #     if board.in_bounds(pos.y, pos.x + d) and self.is_valid(board[pos.y, pos.x + d]):
-            #         move = pos
-            #         move.x += d
-            #     elif board.in_bounds(pos.y, pos.x - d) and self.is_valid(board[pos.y, pos.x - d]):
-            #         move = pos
-            #         move.x -= d
-            #     else:
-            #         self.is_falling = False
-            #         vel_on_hit = max(self.vel.y * self.bounciness, 2) * d
-            #         # self.vel.x = vel_on_hit
-            #         self.vel = Vec(0, vel_on_hit)
-            #         # print("A", self.vel)
-            # else:
-            #     self.vel.x *= self.friction * neighbor.friction
-            #
-            #     self.push_neighbours(board, move)
-            #     break
-
-        # if self.vel.y != 0 and board[move.y, move.x] is None:
-        #     self.is_falling = True
-
-        # elif self.vel.x != 0:
-        # if self.vel.x != 0:
-        #     # d = round(self.vel.x)
-        #     d = self.vel.round()
-        #     new_dir = interpolate_pos(move, move + d)
-        #     next(new_dir)
-        #     for pos in new_dir:
-        #         # if board.in_bounds(move.y, move.x + d) and self.is_valid(board[move.y, move.x + d]):
-        #         if board.in_bounds(pos.y, pos.x) and self.is_valid(board[pos.y, pos.x]):
-        #             # move.x += d
-        #             move = pos
-        #             self.vel.x *= self.friction
-        #             # board.swap(self, move.y, move.x)
-        #             # return True
-        #         else:
-        #             self.vel.x = 0
-        #             break
-
-        # if board.in_bounds(move.y + 1, move.x) and self.is_valid(board[move.y + 1, move.x]):
-        #     self.is_falling = True
-        #     move.y += 1
-        #     board.swap(self, move.y, move.x)
-        #     self.push_neighbours(board, self.pos)
-        #     return True
-        #
-        # elif self.is_falling:
-        #     d = -1 if random.randint(0, 1) else 1
-        #     if board.in_bounds(move.y + 1, move.x + d) and self.is_valid(board[move.y + 1, move.x + d]):
-        #         move.y += 1
-        #         move.x += d
-        #     elif board.in_bounds(move.y + 1, move.x - d) and self.is_valid(board[move.y + 1, move.x - d]):
-        #         move.y += 1
-        #         move.x -= d
-        #     else:
-        #         self.is_falling = False
-        #         self.vel = Vec(0, d)
-        #         return True
-        #
-        #     board.swap(self, move.y, move.x)
-        #     self.push_neighbours(board, self.pos)
-        #     return True
-        #
-        # elif self.vel.x != 0:
-        #     d = round(self.vel.x)
-        #     if board.in_bounds(move.y, move.x + d) and self.is_valid(board[move.y, move.x + d]):
-        #         move.x += d
-        #         self.vel.x *= self.friction
-        #         board.swap(self, move.y, move.x)
-        #         return True
-        #     else:
-        #         self.vel.x = 0
 
         if move == self.pos:
             self.is_falling = False
@@ -276,55 +202,135 @@ class Sand(Particle):
 
 class Water(Particle):
     priority = {ParticleType.Sand, ParticleType.Wood}
+    state = StateOfAggregation.Liquid
 
     def __init__(self, y: int, x: int) -> None:
         super(Water, self).__init__(y, x)
         self.color = random.choice(COLORS["Water"])
 
-        self.vel = Vec(0., 3.)
+        self.vel = Vec(0.0, 0.0)
 
-    def _step(self, board: Board) -> bool:
-        state = False
+        self.bounciness = 0.75
+        self.density = 10.
+        self.dispersion = 4
+        self.mass = 30.
+
+    def _step(self, board: tools.Board) -> bool:
         move = self.pos.copy()
-        if board.in_bounds(move.y + 1, move.x) and self.is_valid(board[move.y + 1, move.x]):
-            move.y += 1
-            board.swap(self, move.y, move.x)
-            return True
 
-        d = -1 if random.randint(0, 1) else 1
-        if board.in_bounds(move.y + 1, move.x + d) and self.is_valid(board[move.y + 1, move.x + d]):
-            move.y += 1
-            move.x += d
-            state = True
+        self.vel.y += GRAVITY
+        if self.is_falling:
+            self.vel.x *= AIR_FRICTION
 
-        elif board.in_bounds(move.y + 1, move.x - d) and self.is_valid(board[move.y + 1, move.x - d]):
-            move.y += 1
-            move.x -= d
-            state = True
+        target_position = (self.pos + self.vel).round()
+        direction = tools.interpolate_pos_dda(self.pos, target_position)
+        next(direction)  # skipping current position
 
-        elif board.in_bounds(move.y + 1, move.x + d) and self.is_valid(board[move.y + 1, move.x + d]):
-            move.y += 1
-            move.x += d
-            state = True
+        for pos in direction:
+            if not board.in_bounds(pos.y, pos.x):
+                self.vel = Vec(0.0, 0.0)
+                break
 
-        elif board.in_bounds(move.y + 1, move.x - d) and self.is_valid(board[move.y + 1, move.x - d]):
-            move.y += 1
-            move.x -= d
-            state = True
+            neighbor = board[pos.y, pos.x]
+            if self.is_valid(neighbor):
+                move = pos
+                self.push_neighbours(board, move)
+            else:
+                # if neighbor.state == StateOfAggregation.Liquid:
+                #     if self.density > neighbor.density:
+                #         move = pos
+                #         continue
+                #     elif self.vel.y - neighbor.vel.y > 2:
+                #         move = pos
+                #         self.vel.y = 0
+                #         continue
 
-        elif board.in_bounds(move.y, move.x + d) and self.is_valid(board[move.y, move.x + d]):
-            move.x += d
-            state = True
+                if self.is_falling:
+                    vel_on_hit = max(self.vel.y * self.bounciness, 4.0)
+                    if self.vel.x:
+                        self.vel.x = vel_on_hit if self.vel.x > 0.0 else -vel_on_hit
+                    else:
+                        d = -1.0 if random.randint(0, 1) else 1.0
+                        self.vel.x = vel_on_hit * d
 
-        elif board.in_bounds(move.y, move.x - d) and self.is_valid(board[move.y, move.x - d]):
-            move.x -= d
-            state = True
+                additional_pos = self.vel.normalize()
+
+                self.vel.x *= self.friction * neighbor.friction
+                avg_vel = (self.vel.y + neighbor.vel.y) / 2
+                # if avg_vel < GRAVITY:
+                #     self.vel.y = GRAVITY
+                # else:
+                #     self.vel.y = avg_vel
+                self.vel.y = 0.0
+                # neighbor.vel.y = self.vel.y
+
+                if -0.1 < additional_pos.y < 0.1:
+                    additional_pos.y = 0
+                else:
+                    additional_pos.y = -1 if additional_pos.y < 0 else 1
+                if -0.1 < additional_pos.x < 0.1:
+                    additional_pos.x = 0
+                else:
+                    additional_pos.x = -1 if additional_pos.x < 0 else 1
+                additional_pos = additional_pos.round()
+
+                go_out = False
+                diagonal_neighbor_pos = move + additional_pos
+                new_target = diagonal_neighbor_pos.copy()
+                new_target.x += additional_pos.x * self.dispersion
+                for new_pos in tools.interpolate_pos_dda(diagonal_neighbor_pos, new_target):
+                    if board.in_bounds(new_pos.y, new_pos.x):
+                        diagonal_neighbor = board[new_pos.y, new_pos.x]
+                        if self.is_valid(diagonal_neighbor):
+                            self.is_falling = True
+                            move = new_pos
+                        else:
+                            break
+                    else:
+                        go_out = True
+                        break
+                else:
+                    break
+
+                if go_out:
+                    break
+
+                next_neighbor_pos = move + Vec(0, additional_pos.x)
+                new_target = next_neighbor_pos.copy()
+                new_target.x += additional_pos.x * self.dispersion
+                if next_neighbor_pos != diagonal_neighbor_pos:
+                    for new_pos in tools.interpolate_pos_dda(next_neighbor_pos, new_target):
+                        if board.in_bounds(new_pos.y, new_pos.x):
+                            next_neighbor = board[new_pos.y, new_pos.x]
+                            if self.is_valid(next_neighbor):
+                                self.is_falling = False
+                                move = next_neighbor_pos
+                            else:
+                                self.vel.x *= -1
+                                break
+                        else:
+                            break
+                    else:
+                        break
+
+                self.is_falling = False
+                break
+        else:
+            neighbor = board[target_position.y, target_position.x]
+            if self.is_valid(neighbor):
+                self.is_falling = True
+
+        if move == self.pos:
+            self.is_falling = False
+            return False
 
         board.swap(self, move.y, move.x)
-        return state
+        return True
 
 
 class Wood(Particle):
+    state = StateOfAggregation.Solid
+
     def __init__(self, y: int, x: int) -> None:
         super(Wood, self).__init__(y, x)
         self.color = random.choice(COLORS["Wood"])
@@ -332,12 +338,13 @@ class Wood(Particle):
         self.flammable = 96
         self.friction = 0.5
 
-    def on_update(self, board: Board) -> bool:
+    def on_update(self, board: tools.Board) -> bool:
         return False
 
 
 class Fire(Particle):
     priority = {ParticleType.Sand, ParticleType.Water, ParticleType.Wood}
+    state = StateOfAggregation.Gas
 
     def __init__(self, y: int, x: int, been_updated: bool = False) -> None:
         super(Fire, self).__init__(y, x, been_updated=been_updated)
@@ -346,7 +353,7 @@ class Fire(Particle):
         self.heat = 100
         self.flammable = 1
 
-    def receive_heat(self, cell: Union[Particle, None]) -> None:
+    def receive_heat(self, cell: Optional[Particle]) -> None:
         if cell is None:
             self.heat *= 0.99
             return
@@ -360,7 +367,7 @@ class Fire(Particle):
         if self.heat > 100:
             self.heat = 100
 
-    def on_update(self, board: Board) -> bool:
+    def on_update(self, board: tools.Board) -> bool:
         if self.been_updated:
             return False
         self.been_updated = True
@@ -392,7 +399,7 @@ class Fire(Particle):
 
 class Smoke(Particle):
     priority = {ParticleType.Sand, ParticleType.Water, ParticleType.Wood}
-    Iterations = 1
+    state = StateOfAggregation.Gas
 
     def __init__(self, y: int, x: int, been_updated: bool = False) -> None:
         super(Smoke, self).__init__(y, x, been_updated=been_updated)
@@ -401,7 +408,7 @@ class Smoke(Particle):
 
         self.vel = Vec(-1., 0.)
 
-    def _step(self, board: Board) -> bool:
+    def _step(self, board: tools.Board) -> bool:
         if self.lifetime < 0:
             board[self.pos.y, self.pos.x] = None
             return False
@@ -431,7 +438,7 @@ class Eraser(Particle):
         return None
 
     @classmethod
-    def is_valid(cls, spot: Union[ParticleType, None]) -> bool:
+    def is_valid(cls, spot: Optional[ParticleType]) -> bool:
         return True
 
 

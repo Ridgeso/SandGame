@@ -1,13 +1,13 @@
-from typing import Type, Tuple
-from enum import IntEnum
+from enum import IntEnum, auto
 
 import pygame as py
 import numpy as np
 
-import values
+from values import *
 from src import convert
-from src.particle import *
-from src.tools import *
+from src.vec import Vec
+import src.particle as particle
+import src.tools as tools
 
 
 class Display:
@@ -21,13 +21,9 @@ class Display:
         self.surface = py.Surface((BOARD_X, BOARD_Y))
 
         # Board
-        self.board = Board(BOARD_Y, BOARD_X)
-        self.brush = Brush(Sand)
-        self.last_mouse_position: Union[Vec, None] = None
-
-        # self.board[10, 50] = Sand(10, 50)
-        self.board[10, 20] = Sand(10, 20)
-        # self.board[11, 50] = Sand(11, 50)
+        self.board = tools.Board(BOARD_Y, BOARD_X)
+        self.brush = tools.Brush(particle.Sand)
+        self.last_mouse_position = None
 
         # Chunks
         self.chunk_size = 10  # 10 x 10
@@ -39,7 +35,7 @@ class Display:
             for column in range(0, BOARD_X, self.chunk_size):
                 # max chunk size or chunk loss
                 chunk_width = self.chunk_size if BOARD_X - column > self.chunk_size else BOARD_X - column
-                temp_chunk_row.append(Chunk(
+                temp_chunk_row.append(tools.Chunk(
                     row, column,
                     chunk_height, chunk_width,
                     True, False
@@ -59,27 +55,25 @@ class Display:
         mouse_button_pressed = py.mouse.get_pressed(num_buttons=3)
         keys_pressed = py.key.get_pressed()
 
-        def activate_chunk_on_draw():
+        def activate_chunk_on_draw() -> None:
             if self.last_mouse_position is None:
                 self.last_mouse_position = mouse_pos
             start_chunk_pos = Vec(self.last_mouse_position.x // self.chunk_threshold,
                                   self.last_mouse_position.y // self.chunk_threshold)
             end_chunk_pos = Vec(mouse_pos.x // self.chunk_threshold, mouse_pos.y // self.chunk_threshold)
-            for chunk_pos in interpolate_pos(start_chunk_pos, end_chunk_pos):
+            for chunk_pos in tools.interpolate_pos(start_chunk_pos, end_chunk_pos):
                 self.activate_chunks_around(chunk_pos.y, chunk_pos.x)
             self.last_mouse_position = mouse_pos
 
         if mouse_button_pressed[self.MouseKey.Left]:
             # Draw Particles
             self.brush.paint(self.board, mouse_pos)
-            # pos = Vec(mouse_pos.x // SCALE, mouse_pos.y // SCALE)
-            # self.brush.paint_point(self.board, pos)
             # Activate chunks
             activate_chunk_on_draw()
         elif mouse_button_pressed[self.MouseKey.Right]:
             # Erase Particles
             temp_pen = self.brush.pen
-            self.brush.pen = Eraser
+            self.brush.pen = particle.Eraser
             self.brush.paint(self.board, mouse_pos)
             self.brush.pen = temp_pen
             # Activate chunks
@@ -89,30 +83,21 @@ class Display:
             self.last_mouse_position = None
 
         if keys_pressed[py.K_s]:
-            self.brush.pen = Sand
+            self.brush.pen = particle.Sand
         elif keys_pressed[py.K_q]:
-            self.brush.pen = Wood
+            self.brush.pen = particle.Wood
         elif keys_pressed[py.K_w]:
-            self.brush.pen = Water
+            self.brush.pen = particle.Water
         elif keys_pressed[py.K_e]:
-            self.brush.pen = Fire
+            self.brush.pen = particle.Fire
         elif keys_pressed[py.K_r]:
-            self.brush.pen = Smoke
+            self.brush.pen = particle.Smoke
 
     def resize_cursor(self, value: int) -> None:
         self.brush.pen_size += value
 
     def draw_cursor(self) -> None:
         py.draw.circle(self.win, (66, 66, 66), py.mouse.get_pos(), SCALE*self.brush.pen_size, 2)
-
-    def fill(self, color: Tuple[int, ...]) -> None:
-        self.win.fill(color)
-
-    def _partial_update(self, chunk: Tuple[int, int]) -> None:
-        for level in reversed(range(self.board.shape[0])):
-            for cell in range(*chunk):
-                if self.board[level, cell] is not None:
-                    self.board[level, cell].on_update(self.board)
 
     def activate_chunks_around(self, x: int, y: int) -> None:
         self.chunks[x, y].activate()
@@ -126,7 +111,7 @@ class Display:
         if 0 <= y + 1 < self.chunks.shape[1]:
             self.chunks[x, y + 1].activate()
 
-    def on_update_chunk(self, chunk: Chunk) -> None:
+    def on_update_chunk(self, chunk: tools.Chunk) -> None:
         for i in reversed(range(chunk.width)):
             for j in range(chunk.height):
                 cell = self.board[chunk.x + i, chunk.y + j]
@@ -138,10 +123,6 @@ class Display:
 
     # @Timeit(log="UPDATING", max_time=True, min_time=True)
     def update(self) -> None:
-        # for level in self.board:
-        #     for cell in level:
-        #         if cell is not None:
-        #             cell.on_update(self.board)
         for chunk_row in reversed(self.chunks):
             for chunk in chunk_row:
                 if chunk.is_active():
@@ -165,7 +146,7 @@ class Display:
                 for chunk in chunk_row:
                     chunk.draw_debug_chunk(self.win)
 
-    def reset_chunks(self):
+    def reset_chunks(self) -> None:
         for chunk_row in self.chunks:
             for chunk in chunk_row:
                 chunk.update()
@@ -174,9 +155,13 @@ class Display:
         data, offset_y, offset_x = convert.convert_img(WX, WY)
 
         which_color = {"Sand": 0, "Water": 0, "Wood": 0, "Fire": 0, "Smoke": 0}
-        color_obj = {"Sand": Sand, "Water": Water, "Wood": Wood, "Fire": Fire, "Smoke": Smoke}
+        color_obj = {"Sand": particle.Sand,
+                     "Water": particle.Water,
+                     "Wood": particle.Wood,
+                     "Fire": particle.Fire,
+                     "Smoke": particle.Smoke}
 
-        def filter_color(c):
+        def filter_color(c: int) -> int:
             r = c >> 16 & 0xFF
             g = c >> 8 & 0xFF
             b = c >> 0 & 0xFF
@@ -188,8 +173,8 @@ class Display:
                     return
 
                 pixel_val = (pixel[0] << 16) + (pixel[1] << 8) + pixel[2]
-                for color in COLORS:
-                    pos_difference = COLORS[color] - pixel_val
+                for color in particle.COLORS:
+                    pos_difference = particle.COLORS[color] - pixel_val
                     which_color[color] = min(map(filter_color, pos_difference))
 
                 best_pixel = color_obj[min(which_color, key=which_color.get)]

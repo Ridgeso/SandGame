@@ -1,11 +1,11 @@
-from typing import Type, Callable, Iterator, Optional
+from typing import Type, Callable, Iterator, Optional, Any
 from functools import wraps
 from time import perf_counter
 
 import numpy as np
 import pygame as py
 
-from src.vec import *
+from src.vec import Vec
 from values import *
 Particle = Type['Particle']
 
@@ -38,10 +38,10 @@ class Chunk:
         else:
             self.updated_this_frame = False
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"Chunk(y={self.x},x={self.y},h={self.width},w={self.height})"
 
-    def draw_debug_chunk(self, win):
+    def draw_debug_chunk(self, win) -> None:
         color = 0x00FF00 if self.updated_this_frame else 0xFF0000
         py.draw.rect(win, color, ((self.y*SCALE, self.x*SCALE), (self.height*SCALE, self.width*SCALE)), 1)
 
@@ -68,7 +68,7 @@ class Brush:
         self._pen: Type[Particle] = pen
         self._pen_size: int = PAINT_SCALE
         self.PendDifference: int = self._pen_size
-        self.last_mouse_on_board_position: Union[Vec, None] = Vec()
+        self.last_mouse_on_board_position: Optional[Vec] = None
 
     @property
     def pen(self) -> Type[Particle]:
@@ -83,7 +83,7 @@ class Brush:
         return self._pen_size
 
     @pen_size.setter
-    def pen_size(self, value: int):
+    def pen_size(self, value: int) -> None:
         if value > 0:
             self._pen_size = value
             self.PendDifference = value
@@ -94,7 +94,7 @@ class Brush:
         if self.pen.is_valid(board[point.y, point.x]):
             board[point.y, point.x] = self.pen(point.y, point.x)
 
-    def paint_from_to(self, board: Board, start: Vec, end: Vec, slope: Union[Vec, None] = None) -> None:
+    def paint_from_to(self, board: Board, start: Vec, end: Vec, slope: Optional[Vec] = None) -> None:
         for pos in interpolate_pos(start, end, slope):
             self.paint_point(board, pos)
 
@@ -150,13 +150,10 @@ def chunk_intersect_with_brush(chunk: Chunk, brush: Brush, brush_pos: Vec) -> bo
     # Calculating relative position between Chunk and Brush (on the left or right side, above or below)
     near = Vec(max(chunk.y, min(chunk.y + chunk.height, brush_pos.y)),
                max(chunk.x, min(chunk.x + chunk.width, brush_pos.x)))
-
     # Nearest point downsize to the origin
     near -= brush_pos
-
     # if distance is lower than brush radius we have an intersection
     distance = near.size()
-
     if distance <= brush.pen_size**2:
         return True
 
@@ -225,11 +222,11 @@ class Timeit:
         self.max_time_spend = 0
         self.min_time_spend = 1_000_000
 
-    def __call__(self, f: Callable):
+    def __call__(self, f: Callable[[Any, ...], Any]) -> Callable[[Any, ...], Any]:
         self.log += f"[{f.__name__}]" + " | {:7.03f} ms"
 
         @wraps(f)
-        def wrapper(*args, **kwargs):
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
             # Function
             start = perf_counter()
             result = f(*args, **kwargs)

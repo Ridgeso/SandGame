@@ -2,3 +2,4 @@ numpy==1.23.2
 pygame==2.1.2
 Pillow==9.2.0
 Cython==0.29.32
+pytest[tests]==7.1.2

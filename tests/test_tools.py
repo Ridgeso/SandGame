@@ -1,5 +1,5 @@
 import time
-from typing import Iterator
+from typing import Iterable
 import pytest
 from src.tools import *
 
@@ -34,7 +34,7 @@ def end():
     )
 
 
-def test_interpolate_pos(start: Iterator[Vec], end: Iterator[Vec]) -> None:
+def test_interpolate_pos(start: Iterable[Vec], end: Iterable[Vec]) -> None:
     for s, e in zip(start, end):
         last_pos = None
 
@@ -46,19 +46,24 @@ def test_interpolate_pos(start: Iterator[Vec], end: Iterator[Vec]) -> None:
             last_pos = pos
 
         assert round(last_pos.magnitude()) == round(e.magnitude()), ValueError("Destination not reached")
-        # assert last_pos == e.round(), ValueError("Destination not reached")
 
 
 def test_interpolate_pos_dda(start: Iterator[Vec], end: Iterator[Vec]) -> None:
     for s, e in zip(start, end):
         last_pos = None
+        prev_pos = s
 
         direction = interpolate_pos_dda(s, e)
 
         start_time = time.perf_counter()
         for pos in direction:
             assert time.perf_counter() - start_time < MAX_TIME, TimeoutError(f"Infinity loop")
-            last_pos = pos
+            last_pos = prev_pos
+            prev_pos = pos
 
-        # assert round(last_pos.magnitude()) == round(e.magnitude()), ValueError("Destination not reached")
-        assert last_pos == e.round(), ValueError("Destination not reached")
+        end = e.round()
+        assert last_pos == end\
+            or last_pos == end - Vec(1, 0)\
+            or last_pos == end - Vec(0, 1)\
+            or last_pos == end + Vec(1, 0)\
+            or last_pos == end + Vec(0, 1), ValueError("Destination not reached")
