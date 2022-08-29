@@ -3,8 +3,9 @@ from enum import Enum, auto
 import random
 import math
 
+import glm
+
 import src.tools as tools
-from src.vec import Vec
 from values import *
 
 
@@ -33,8 +34,8 @@ class Particle:
         self.is_falling: bool = is_falling
 
         self.color: int = 0
-        self.pos: Vec = Vec(y, x)
-        self.vel: Vec = Vec(0., 0.)
+        self.pos: glm.ivec2 = glm.ivec2(x, y)
+        self.vel: glm.vec2 = glm.vec2()
 
         self.lifetime: float = 0.0
         self.flammable: float = 100.0
@@ -61,7 +62,7 @@ class Particle:
     def reset(self) -> None:
         self.been_updated = False
 
-    def push_neighbours(self, board: tools.Board, from_location: Vec) -> None:
+    def push_neighbours(self, board: tools.Board, from_location: glm.ivec2) -> None:
         if board.in_bounds(from_location.y, from_location.x - 1):
             left = board[from_location.y, from_location.x - 1]
             if left is not None and self.id() == left.id():
@@ -90,7 +91,10 @@ class Particle:
     def __eq__(self, other):
         if other is None:
             return False
-        return self.pos.x == other.pos.x and self.pos.y == other.pos.y
+        return self.pos == other.pos
+
+    def __repr__(self):
+        return f"{self.__class__,}(y={self.pos.y}, x={self.pos.x})"
 
     @staticmethod
     def _round_shift(v: float) -> float:
@@ -109,7 +113,7 @@ class Sand(Particle):
         super(Sand, self).__init__(y, x)
         self.color = random.choice(COLORS["Sand"])
 
-        self.vel = Vec(0., 0.)
+        self.vel = glm.vec2(0., 0.)
 
         self.friction = 0.75
         self.inertial_resistance = 0.5
@@ -117,19 +121,19 @@ class Sand(Particle):
         self.mass = 54.0
 
     def _step(self, board: tools.Board) -> bool:
-        move = self.pos.copy()
+        move = glm.ivec2(self.pos)
 
         self.vel.y += GRAVITY
         if self.is_falling:
             self.vel.x *= AIR_FRICTION
 
-        target_position = (self.pos + self.vel).round()
+        target_position = self.pos + glm.ivec2(glm.round(self.vel))
         direction = tools.interpolate_pos_dda(self.pos, target_position)
         next(direction)  # skipping current position
 
         for pos in direction:
             if not board.in_bounds(pos.y, pos.x):
-                self.vel = Vec(0.0, 0.0)
+                self.vel = glm.vec2()
                 break
 
             neighbor = board[pos.y, pos.x]
@@ -145,7 +149,7 @@ class Sand(Particle):
                         d = -1.0 if random.randint(0, 1) else 1.0
                         self.vel.x = vel_on_hit * d
 
-                additional_pos = self.vel.normalize()
+                additional_pos = glm.normalize(self.vel)
 
                 self.vel.x *= self.friction * neighbor.friction
                 avg_vel = (self.vel.y + neighbor.vel.y) / 2
@@ -164,7 +168,7 @@ class Sand(Particle):
                     additional_pos.x = 0
                 else:
                     additional_pos.x = -1 if additional_pos.x < 0 else 1
-                additional_pos = additional_pos.round()
+                additional_pos = glm.ivec2(glm.round(additional_pos))
 
                 diagonal_neighbor_pos = move + additional_pos
                 if board.in_bounds(diagonal_neighbor_pos.y, diagonal_neighbor_pos.x):
@@ -174,7 +178,7 @@ class Sand(Particle):
                         move = diagonal_neighbor_pos
                         break
 
-                next_neighbor_pos = move + Vec(0, additional_pos.x)
+                next_neighbor_pos = move + glm.ivec2(additional_pos.x, 0)
                 if next_neighbor_pos != diagonal_neighbor_pos:
                     if board.in_bounds(next_neighbor_pos.y, next_neighbor_pos.x):
                         next_neighbor = board[next_neighbor_pos.y, next_neighbor_pos.x]
@@ -208,7 +212,7 @@ class Water(Particle):
         super(Water, self).__init__(y, x)
         self.color = random.choice(COLORS["Water"])
 
-        self.vel = Vec(0.0, 0.0)
+        self.vel = glm.vec2()
 
         self.bounciness = 0.75
         self.density = 10.
@@ -216,19 +220,19 @@ class Water(Particle):
         self.mass = 30.
 
     def _step(self, board: tools.Board) -> bool:
-        move = self.pos.copy()
+        move = glm.ivec2(self.pos)
 
         self.vel.y += GRAVITY
         if self.is_falling:
             self.vel.x *= AIR_FRICTION
 
-        target_position = (self.pos + self.vel).round()
+        target_position = self.pos + glm.ivec2(glm.round(self.vel))
         direction = tools.interpolate_pos_dda(self.pos, target_position)
         next(direction)  # skipping current position
 
         for pos in direction:
             if not board.in_bounds(pos.y, pos.x):
-                self.vel = Vec(0.0, 0.0)
+                self.vel *= glm.vec2(-0.5, 0)
                 break
 
             neighbor = board[pos.y, pos.x]
@@ -253,16 +257,10 @@ class Water(Particle):
                         d = -1.0 if random.randint(0, 1) else 1.0
                         self.vel.x = vel_on_hit * d
 
-                additional_pos = self.vel.normalize()
+                additional_pos = glm.normalize(self.vel)
 
                 self.vel.x *= self.friction * neighbor.friction
-                avg_vel = (self.vel.y + neighbor.vel.y) / 2
-                # if avg_vel < GRAVITY:
-                #     self.vel.y = GRAVITY
-                # else:
-                #     self.vel.y = avg_vel
                 self.vel.y = 0.0
-                # neighbor.vel.y = self.vel.y
 
                 if -0.1 < additional_pos.y < 0.1:
                     additional_pos.y = 0
@@ -272,11 +270,11 @@ class Water(Particle):
                     additional_pos.x = 0
                 else:
                     additional_pos.x = -1 if additional_pos.x < 0 else 1
-                additional_pos = additional_pos.round()
+                additional_pos = glm.ivec2(glm.round(additional_pos))
 
                 go_out = False
                 diagonal_neighbor_pos = move + additional_pos
-                new_target = diagonal_neighbor_pos.copy()
+                new_target = glm.ivec2(diagonal_neighbor_pos)
                 new_target.x += additional_pos.x * self.dispersion
                 for new_pos in tools.interpolate_pos_dda(diagonal_neighbor_pos, new_target):
                     if board.in_bounds(new_pos.y, new_pos.x):
@@ -295,8 +293,8 @@ class Water(Particle):
                 if go_out:
                     break
 
-                next_neighbor_pos = move + Vec(0, additional_pos.x)
-                new_target = next_neighbor_pos.copy()
+                next_neighbor_pos = move + glm.ivec2(additional_pos.x, 0)
+                new_target = glm.ivec2(next_neighbor_pos)
                 new_target.x += additional_pos.x * self.dispersion
                 if next_neighbor_pos != diagonal_neighbor_pos:
                     for new_pos in tools.interpolate_pos_dda(next_neighbor_pos, new_target):
@@ -384,7 +382,7 @@ class Fire(Particle):
                 cell = board[self.pos.y + i, self.pos.x + j]
                 self.receive_heat(cell)
 
-                self.pos = self.pos.round()
+                # self.pos = self.pos.round()
                 if cell is None:
                     if not random.randint(0, 51):
                         board[self.pos.y + i, self.pos.x + j] = Smoke(self.pos.y + i, self.pos.x + j, False)
@@ -406,7 +404,7 @@ class Smoke(Particle):
         self.color = random.choice(COLORS["Smoke"])
         self.lifetime = random.randint(10, 80)
 
-        self.vel = Vec(-1., 0.)
+        self.vel = glm.ivec2(-1., 0.)
 
     def _step(self, board: tools.Board) -> bool:
         if self.lifetime < 0:
@@ -414,7 +412,7 @@ class Smoke(Particle):
             return False
         self.lifetime -= 1
 
-        move = self.pos.copy()
+        move = glm.ivec2(self.pos)
 
         if board.in_bounds(move.y - 1, move.x) and board[move.y - 1, move.x] is None:
             move.y -= 1

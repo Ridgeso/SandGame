@@ -1,11 +1,11 @@
 from enum import IntEnum, auto
 
+import glm
 import pygame as py
 import numpy as np
 
 from values import *
 from src import convert
-from src.vec import Vec
 import src.particle as particle
 import src.tools as tools
 
@@ -51,16 +51,16 @@ class Display:
         Right: int = auto()
 
     def paint_particles(self) -> None:
-        mouse_pos = Vec(*py.mouse.get_pos())
+        mouse_pos = glm.ivec2(*py.mouse.get_pos())
         mouse_button_pressed = py.mouse.get_pressed(num_buttons=3)
         keys_pressed = py.key.get_pressed()
 
         def activate_chunk_on_draw() -> None:
             if self.last_mouse_position is None:
                 self.last_mouse_position = mouse_pos
-            start_chunk_pos = Vec(self.last_mouse_position.x // self.chunk_threshold,
-                                  self.last_mouse_position.y // self.chunk_threshold)
-            end_chunk_pos = Vec(mouse_pos.x // self.chunk_threshold, mouse_pos.y // self.chunk_threshold)
+            start_chunk_pos = glm.ivec2(self.last_mouse_position.x // self.chunk_threshold,
+                                        self.last_mouse_position.y // self.chunk_threshold)
+            end_chunk_pos = glm.ivec2(mouse_pos.x // self.chunk_threshold, mouse_pos.y // self.chunk_threshold)
             for chunk_pos in tools.interpolate_pos(start_chunk_pos, end_chunk_pos):
                 self.activate_chunks_around(chunk_pos.y, chunk_pos.x)
             self.last_mouse_position = mouse_pos
@@ -68,6 +68,8 @@ class Display:
         if mouse_button_pressed[self.MouseKey.Left]:
             # Draw Particles
             self.brush.paint(self.board, mouse_pos)
+            # pos = glm.ivec2(mouse_pos.x // SCALE, mouse_pos.y // SCALE)
+            # self.brush.paint_point(self.board, pos)
             # Activate chunks
             activate_chunk_on_draw()
         elif mouse_button_pressed[self.MouseKey.Right]:
@@ -118,8 +120,8 @@ class Display:
                 if cell is not None:
                     have_moved = cell.on_update(self.board)
                     if have_moved:
-                        chunk_pos = Vec(cell.pos.x // self.chunk_size, cell.pos.y // self.chunk_size)
-                        self.activate_chunks_around(chunk_pos.x, chunk_pos.y)
+                        chunk_pos = glm.ivec2(cell.pos.x // self.chunk_size, cell.pos.y // self.chunk_size)
+                        self.activate_chunks_around(chunk_pos.y, chunk_pos.x)
 
     # @Timeit(log="UPDATING", max_time=True, min_time=True)
     def update(self) -> None:

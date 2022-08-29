@@ -1,11 +1,12 @@
-from typing import Type, Callable, Iterator, Optional, Any
+from typing import Type, Callable, Iterator, Optional, Any, Union
 from functools import wraps
 from time import perf_counter
+import math
 
+import glm
 import numpy as np
 import pygame as py
 
-from src.vec import Vec
 from values import *
 Particle = Type['Particle']
 
@@ -60,7 +61,7 @@ class Board(np.ndarray):
         if self[cell.pos.y, cell.pos.x] is not None:
             self[cell.pos.y, cell.pos.x].pos = cell.pos
 
-        cell.pos = Vec(y, x)
+        cell.pos = glm.ivec2(x, y)
 
 
 class Brush:
@@ -68,7 +69,7 @@ class Brush:
         self._pen: Type[Particle] = pen
         self._pen_size: int = PAINT_SCALE
         self.PendDifference: int = self._pen_size
-        self.last_mouse_on_board_position: Optional[Vec] = None
+        self.last_mouse_on_board_position: Optional[glm.ivec2] = None
 
     @property
     def pen(self) -> Type[Particle]:
@@ -88,35 +89,36 @@ class Brush:
             self._pen_size = value
             self.PendDifference = value
 
-    def paint_point(self, board: Board, point: Vec) -> None:
+    def paint_point(self, board: Board, point: glm.ivec2) -> None:
         if not board.in_bounds(point.y, point.x):
             return
         if self.pen.is_valid(board[point.y, point.x]):
             board[point.y, point.x] = self.pen(point.y, point.x)
 
-    def paint_from_to(self, board: Board, start: Vec, end: Vec, slope: Optional[Vec] = None) -> None:
+    def paint_from_to(self, board: Board, start: Union[glm.vec2, glm.ivec2], end: Union[glm.vec2, glm.ivec2],
+                      slope: Optional[glm.vec2] = None) -> None:
         for pos in interpolate_pos(start, end, slope):
             self.paint_point(board, pos)
 
-    def paint(self, board: Board, pos: Vec) -> None:
-        pos = pos.copy()
-        pos.y, pos.x = pos.x, pos.y
+    def paint(self, board: Board, pos: glm.ivec2) -> None:
+        pos = glm.ivec2(pos)
 
-        pos.y //= SCALE
-        pos.x //= SCALE
+        pos /= SCALE
 
         if self.last_mouse_on_board_position is None:
-            self.last_mouse_on_board_position = pos.copy()
-        slope = (pos - self.last_mouse_on_board_position).normalize()
+            self.last_mouse_on_board_position = glm.ivec2(pos)
+        slope = glm.vec2(pos - self.last_mouse_on_board_position)
+        if slope != glm.vec2():
+            slope = glm.normalize(slope)
 
         # drawing cross that expends over the gap between the brush positions
         for offset in range(-self.pen_size, self.pen_size):
-            y = Vec(offset, 0)
+            y = glm.ivec2(0, offset)
             point_y = pos + y
             last_point_y = self.last_mouse_on_board_position + y
             self.paint_from_to(board, last_point_y, point_y, slope)
 
-            x = Vec(0, offset)
+            x = glm.ivec2(offset, 0)
             point_x = pos + x
             last_point_x = self.last_mouse_on_board_position + x
             self.paint_from_to(board, last_point_x, point_x, slope)
@@ -126,7 +128,7 @@ class Brush:
             offset = pow((pow(self.pen_size, 2) - pow(y, 2)), 0.5)
             offset = round(offset)
             for x in range(-offset, offset):
-                r_phi = Vec(y, x)
+                r_phi = glm.ivec2(y, x)
                 point = pos + r_phi
                 last_point = self.last_mouse_on_board_position + r_phi
                 self.paint_point(board, point)
@@ -135,71 +137,73 @@ class Brush:
         self.last_mouse_on_board_position = pos
 
     # TODO: Deal with circular import
-    # def erase(self, board: Board, pos: Vec) -> None:
+    # def erase(self, board: Board, pos: glm.ivec2) -> None:
     #     pen = self.pen
     #     self.pen = Eraser
     #     self.paint(board, pos)
     #     self.pen = pen
 
 
-def chunk_intersect_with_brush(chunk: Chunk, brush: Brush, brush_pos: Vec) -> bool:
-    brush_pos = brush_pos.copy()
-    brush_pos.x = brush_pos.x // SCALE
-    brush_pos.y = brush_pos.y // SCALE
+def chunk_intersect_with_brush(chunk: Chunk, brush: Brush, brush_pos: glm.ivec2) -> bool:
+    brush_pos = glm.ivec2(brush_pos)
+    brush_pos //= SCALE
 
     # Calculating relative position between Chunk and Brush (on the left or right side, above or below)
-    near = Vec(max(chunk.y, min(chunk.y + chunk.height, brush_pos.y)),
-               max(chunk.x, min(chunk.x + chunk.width, brush_pos.x)))
+    near = glm.ivec2(max(chunk.x, min(chunk.x + chunk.width, brush_pos.x)),
+                     max(chunk.y, min(chunk.y + chunk.height, brush_pos.y)))
     # Nearest point downsize to the origin
     near -= brush_pos
     # if distance is lower than brush radius we have an intersection
-    distance = near.size()
+    distance = glm.length(near)
     if distance <= brush.pen_size**2:
         return True
 
     return False
 
 
-def interpolate_pos(start: Vec, end: Vec, slope: Optional[Vec] = None) -> Iterator[Vec]:
+def interpolate_pos(start: Union[glm.vec2, glm.ivec2], end: Union[glm.vec2, glm.ivec2],
+                    slope: Optional[glm.vec2] = None) -> Iterator[glm.ivec2]:
     if slope is None:
-        slope = (end - start).to_float()
-        length = slope.magnitude()
+        slope = glm.vec2(end - start)
+        length = glm.length(slope)
         if length:
-            slope.y /= length
-            slope.x /= length
+            slope = glm.normalize(slope)
     else:
-        length = (end - start).magnitude()
+        length = glm.length(glm.vec2(end - start))
 
     for i in range(round(length) + 1):
-        yield start + (slope * i).round()
+        yield start + glm.ivec2(glm.round(slope * i))
 
 
-def interpolate_pos_dda(start: Vec, end: Vec, slope: Optional[Vec] = None) -> Iterator[Vec]:
+def interpolate_pos_dda(start: Union[glm.vec2, glm.ivec2], end: Union[glm.vec2, glm.ivec2],
+                        slope: Optional[glm.vec2] = None) -> Iterator[glm.ivec2]:
     """
     Generate position vector for each cell along the path
     :param start: Starting cell
     :param end: Target Cell
     :param slope: unit slope vector
-    :returns: Vec
+    :returns: glm.ivec2
     """
 
-    if slope is None:
-        slope = (end - start).normalize()
+    if slope is None and (slope := end - start) != glm.vec2():
+        slope = glm.normalize(glm.vec2(slope))
 
     # Moving through cells
-    cell_direction = Vec(1 if slope.y > 0. else -1,
-                         1 if slope.x > 0. else -1)
+    cell_direction = glm.ivec2(1 if slope.x > 0. else -1,
+                               1 if slope.y > 0. else -1)
 
     # Moving through plane
-    unit_distance = Vec(Vec(1, slope.x/slope.y).magnitude(),  # dx for 1y
-                        Vec(1, slope.y/slope.x).magnitude())  # dy for 1x
+    dx = slope.x/slope.y if slope.y != 0.0 else math.inf
+    dy = slope.y/slope.x if slope.x != 0.0 else math.inf
+    unit_distance = glm.vec2(glm.length(glm.vec2(1, dy)),  # dx for 1x
+                             glm.length(glm.vec2(1, dx)))  # dy for 1y
 
     # 1st position
-    yield start.copy()
+    yield glm.ivec2(start)
 
-    current_cell = start.round()
-    end = end.round()
-    distances = unit_distance.copy()
+    current_cell = glm.ivec2(start)
+    end = glm.ivec2(end)
+    distances = glm.vec2(unit_distance)
     while current_cell != end:
         if distances.y < distances.x:
             current_cell.y += cell_direction.y
@@ -208,7 +212,7 @@ def interpolate_pos_dda(start: Vec, end: Vec, slope: Optional[Vec] = None) -> It
             current_cell.x += cell_direction.x
             distances.x += unit_distance.x
 
-        yield current_cell.copy()
+        yield glm.ivec2(current_cell)
 
 
 # Debug
