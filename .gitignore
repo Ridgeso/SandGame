@@ -4,7 +4,8 @@
 /.pytest_cache
 
 # Cython files
-*.c
+cver/*.c
+!cver/vector.c
 *.pyd
 *.html
 
