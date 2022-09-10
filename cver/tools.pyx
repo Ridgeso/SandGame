@@ -1,8 +1,12 @@
-from libc.stdio cimport printf, malloc, free
+from ..values import *
+
+from libc.stdio cimport printf
+from libc.stdlib cimport malloc, free
 from cparticle cimport *
 
 cdef extern from "math.h":
-    double INFINITY
+    float INFINITY
+    double sqrt(double)
 
 
 cdef extern from "vector.h": *
@@ -21,6 +25,8 @@ cdef Chunk makeChunk(int y, int x, int height, int width):
     chunk.x = x
     chunk.height = height
     chunk.width = width
+    chunk.updateThisFrame = True
+    chunk.shouldBeUpdatedNextFrame = True
     return chunk
 
 cdef void activateChunk(Chunk* chunk):
@@ -42,12 +48,6 @@ cdef public struct Board:
     int height, width
     Particle_t** board
 
-cdef inline Particle_t* getParticle(Board* board, int y, int x):
-    return board.board[y][x]
-
-cdef inline void setParticle(Board* board, int y, int x, Particle_t particle):
-    board.board[y][x] = particle
-
 cdef Board initBoard(int height, int width):
     cdef Board board
     board.height = height
@@ -61,6 +61,12 @@ cdef Board initBoard(int height, int width):
             board.board[i][j] = Empty(i, j, False, True)
         
     return board
+
+cdef inline Particle_t* getParticle(Board* board, int y, int x):
+    return board.board[y][x]
+
+cdef inline void setParticle(Board* board, int y, int x, Particle_t particle):
+    board.board[y][x] = particle
 
 cdef void freeBoard(Board* board):
     cdef int i
@@ -82,9 +88,16 @@ cdef void swap(Board* board, Particle_t* cell, int y, int x):
     cell.pos.y = y
     cell.pos.x = x
 
+
 cdef public struct Brush:
     ParticleType particle
     int penSize
+
+cdef Brush initBrush():
+    cdef Brush brush
+    brush.particle = SAND
+    brush.penSize = PAINT_SACLE
+    return brush
 
 cdef void paintPoint(Brush* brush, Board* board, vec* point):
     if not inBounds(board, point.y, point.x):
@@ -112,10 +125,45 @@ cdef void paintFromTo(Brush* brush, Board* board, vec* start, vec* end):
         paintPoint(brush, board, point)
         point = interpolatePos(NULL, end)
 
-cdef void paint(Brush* brush, Board* board, vec* mousePos):
-    pass
+cdef void paint(Brush* brush, Board* board, vec mousePos, vec lastMousePosition):
+    mousePos = imulv(&mousePos, 1/SCALE)
+    
+    cdef vec slope = <vec>isubv(&mousePos, &lastMousePosition)
+    slope = normalize(&slope)
+
+    cdef ivec y, x
+    y.x = 0
+    x.y = 0
+    cdef ivec pointY, pointX
+    cdef ivec lastPointY, lastPointX
+    cdef int offset
+    for offset in range(-brush.penSize, brush.penSize):
+        y.y = offset
+        pointY = iaddv(&y, &mousePos)
+        lastPointY = iaddv(&y, &lastMousePosition)
+        paintFromTo(brush, board, &pointY, &lastPointY)
+
+        x.x = offset
+        pointX = iaddv(&x, &mousePos)
+        lastPointX = iaddv(&x, &lastMousePosition)
+        paintFromTo(brush, board, &pointX, &lastPointX)
+
+    cdef int cy, cx, radius
+    cdef ivec point, lastPoint, r_phi
+    for cy in range(-brush.penSize, brush.penSize):
+        radius = <int>sqrt(brush.penSize * brush.penSize - cy * cy)
+        for cx in range(-radius, radius):
+            r_phi.y = cy
+            r_phi.x = cx
+            
+            point = iaddv(&mousePos, &r_phi)
+            paintPoint(brush, board, &point)
+
+            lastPoint = iaddv(&lastMousePosition, &r_phi)
+            paintPoint(brush, board, &lastMousePosition)
 
 
+# Interpolation
 cdef ivec current_cell, cell_direction
 cdef vec distances, unit_distance
 cdef ivec* out = <ivec*>malloc(sizeof(ivec))
