@@ -1,24 +1,18 @@
-from ..values import *
+from values import *
 
 from libc.stdio cimport printf
 from libc.stdlib cimport malloc, free
+
+from tools cimport *
 from cparticle cimport *
+from vector cimport *
 
 cdef extern from "math.h":
-    float INFINITY
+    const float INFINITY
     double sqrt(double)
 
 
-cdef extern from "vector.h": *
-
-
-cdef public struct Chunk:
-    int y, x
-    int height, width
-    bint updateThisFrame
-    bint shouldBeUpdatedNextFrame
-
-
+#### CHUNK
 cdef Chunk makeChunk(int y, int x, int height, int width):
     cdef Chunk chunk
     chunk.y = y
@@ -43,11 +37,7 @@ cdef void printChunk(Chunk* chunk):
     printf("Chunk y=%d x=%d height=%d width=%d\n", chunk.y, chunk.x, chunk.height, chunk.width)
 
 
-
-cdef public struct Board:
-    int height, width
-    Particle_t** board
-
+##### BOARD
 cdef Board initBoard(int height, int width):
     cdef Board board
     board.height = height
@@ -63,7 +53,7 @@ cdef Board initBoard(int height, int width):
     return board
 
 cdef inline Particle_t* getParticle(Board* board, int y, int x):
-    return board.board[y][x]
+    return &board.board[y][x]
 
 cdef inline void setParticle(Board* board, int y, int x, Particle_t particle):
     board.board[y][x] = particle
@@ -74,14 +64,14 @@ cdef void freeBoard(Board* board):
         free(<void*>board.board[i])
     free(<void*>board.board)
 
-cdef bint inBounds(Board* board, int y, int y):
+cdef bint inBounds(Board* board, int y, int x):
     return 0 <= y < board.height and 0 <= x < board.width
 
 cdef void swap(Board* board, Particle_t* cell, int y, int x):
     cdef Particle_t* other = getParticle(board, y, x)
     
-    board.board[cell.pos.y][cell.pos.x] = other
-    board.board[y][x] = cell
+    board.board[cell.pos.y][cell.pos.x] = other[0]
+    board.board[y][x] = cell[0]
 
     other.pos = cell.pos
 
@@ -89,17 +79,14 @@ cdef void swap(Board* board, Particle_t* cell, int y, int x):
     cell.pos.x = x
 
 
-cdef public struct Brush:
-    ParticleType pen
-    int penSize
-
+##### BRUSH
 cdef Brush initBrush():
     cdef Brush brush
     brush.pen = SAND
     brush.penSize = PAINT_SACLE
     return brush
 
-cdef void paintPoint(Brush* brush, Board* board, vec* point):
+cdef void paintPoint(Brush* brush, Board* board, ivec* point):
     if not inBounds(board, point.y, point.x):
         return
     cdef Particle_t pen
@@ -117,18 +104,22 @@ cdef void paintPoint(Brush* brush, Board* board, vec* point):
             pen = Smoke(point.y, point.x, False, True)
         elif brush.pen == EMPTY:
             pen = Water(point.y, point.x, False, True)
-        setParticle(board, pen)
+        setParticle(board, point.y, point.x, pen)
 
-cdef void paintFromTo(Brush* brush, Board* board, vec* start, vec* end):
-    cdef vec* point = interpolatePos(start, end)
+cdef void paintFromTo(Brush* brush, Board* board, ivec* start, ivec* end):
+    cdef ivec* point = interpolatePos(start, end)
     while point != NULL:
         paintPoint(brush, board, point)
         point = interpolatePos(NULL, end)
 
-cdef void paint(Brush* brush, Board* board, vec mousePos, vec lastMousePosition):
-    mousePos = imulv(&mousePos, 1/SCALE)
+cdef void paint(Brush* brush, Board* board, ivec mousePos, ivec lastMousePosition):
+    mousePos.y /= SCALE
+    mousePos.x /= SCALE
     
-    cdef vec slope = <vec>isubv(&mousePos, &lastMousePosition)
+    cdef vec fmousePos = ivec2vec(&mousePos)
+    cdef vec flastMousePosition = ivec2vec(&lastMousePosition)
+    
+    cdef vec slope = <vec>subv(&fmousePos, &flastMousePosition)
     slope = normalize(&slope)
 
     cdef ivec y, x
@@ -164,49 +155,72 @@ cdef void paint(Brush* brush, Board* board, vec mousePos, vec lastMousePosition)
 
 
 # Interpolation
-cdef ivec current_cell, cell_direction
-cdef vec distances, unit_distance
-cdef ivec* out = <ivec*>malloc(sizeof(ivec))
+cdef ivec currentCell, cellDirection
+currentCell.y = 0; currentCell.x = 0
+cellDirection.y = 0; cellDirection.x = 0
 
-cdef ivec* interpolatePos(vec* start, vec* end):
+cdef vec distances, unitDistance
+distances.y = 0; distances.x = 0
+unitDistance.y = 0; unitDistance.x = 0
+
+cdef ivec* out = <ivec*>malloc(sizeof(ivec))
+out.y = 0; out.x = 0
+
+cdef ivec* interpolatePos(ivec* start, ivec* end):
+    global currentCell, cellDirection
+    global distances, unitDistance
+    global out
+
+    cdef vec slope, fstart, fend
+    cdef float dy, dx
+
+    cdef vec dist
+    dist.y = 1
+
     if start == NULL:
         if equalIVec(out, end):
             return NULL
         
         if distances.y < distances.x:
-            current_cell.y += cell_direction.y
-            distances.y += unit_distance.y
+            currentCell.y += cellDirection.y
+            distances.y += unitDistance.y
         else:
-            current_cell.x += cell_direction.x
-            distances.x += unit_distance.x
+            currentCell.x += cellDirection.x
+            distances.x += unitDistance.x
 
-        out.y = current_cell.y
-        out.x = current_cell.x
+        out[0] = currentCell
         return out
     
     else:
-        cdef vec slope = subv(end, start)
+        fstart = ivec2vec(start)
+        fend = ivec2vec(end)
+        slope = subv(&fend, &fstart)
         slope = normalize(&slope)
 
         # Moving through cells
-        cell_direction.y = 1 if slope.x > 0. else -1
-        cell_direction.x = 1 if slope.y > 0. else -1
+        cellDirection.y = 1 if slope.x > 0. else -1
+        cellDirection.x = 1 if slope.y > 0. else -1
 
         # Moving through plane
-        cdef float dx = slope.x/slope.y if slope.y != 0.0 else INFINITY
-        cdef float dy = slope.y/slope.x if slope.x != 0.0 else INFINITY
-        cdef vec dist
-        dist.y = 1
+        if slope.y == 0.0:
+            dx = INFINITY
+        else:
+            dx = slope.x/slope.y
+        if slope.x == 0.0:
+            dy = INFINITY
+        else:
+            dy = slope.y/slope.x  
+        # dx = slope.x/slope.y if slope.y != 0.0 else INFINITY
+        # dy = slope.y/slope.x if slope.x != 0.0 else INFINITY
 
         dist.x = dy
-        unit_distance.y = length(&dist)  # dx for 1x
+        unitDistance.y = length(&dist)  # dx for 1x
         dist.x = dx
-        unit_distance.x = length(&dist)  # dy for 1y
+        unitDistance.x = length(&dist)  # dy for 1y
 
         # 1st position
-        current_cell = start
-        distances = unit_distance
+        currentCell = start[0]
+        distances = unitDistance
 
-        out.y = start.y
-        out.x = start.x
+        out[0] = start[0]
         return out

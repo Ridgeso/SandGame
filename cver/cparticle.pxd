@@ -30,3 +30,10 @@ cdef struct Particle_t:
     float mass
 
     bint(* step)(Particle_t*)
+
+cdef Particle_t Sand(int y, int x, bint beenUpdated, bint isFalling)
+cdef Particle_t Water(int y, int x, bint beenUpdated, bint isFalling)
+cdef Particle_t Wood(int y, int x, bint beenUpdated, bint isFalling)
+cdef Particle_t Fire(int y, int x, bint beenUpdated, bint isFalling)
+cdef Particle_t Smoke(int y, int x, bint beenUpdated, bint isFalling)
+cdef Particle_t Empty(int y, int x, bint beenUpdated, bint isFalling)

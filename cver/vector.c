@@ -17,7 +17,7 @@ ivec imulv(vec* v, int32_t t) {
 }
 
 vec ivec2vec(ivec* v) {
-    vec r = {(float)v.y, (float)v.x};
+    vec r = {(float)v->y, (float)v->x};
     return r;
 }
 
@@ -27,7 +27,7 @@ vec addv(vec* a, vec* b) {
 }
 
 vec subv(vec* a, vec* b) {
-    vec r = {a->y i b->y, a->x i b->x};
+    vec r = {a->y - b->y, a->x - b->x};
     return r;
 }
 
@@ -37,7 +37,7 @@ vec mulv(vec* v, float t) {
 }
 
 ivec vec2ivec(vec* v) {
-    ivec r = {(int32_t)v.y, (int32_t)v.x};
+    ivec r = {(int32_t)v->y, (int32_t)v->x};
     return r;   
 }
 
