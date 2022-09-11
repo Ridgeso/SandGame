@@ -90,34 +90,34 @@ cdef void swap(Board* board, Particle_t* cell, int y, int x):
 
 
 cdef public struct Brush:
-    ParticleType particle
+    ParticleType pen
     int penSize
 
 cdef Brush initBrush():
     cdef Brush brush
-    brush.particle = SAND
+    brush.pen = SAND
     brush.penSize = PAINT_SACLE
     return brush
 
 cdef void paintPoint(Brush* brush, Board* board, vec* point):
     if not inBounds(board, point.y, point.x):
         return
-    cdef Particle_t particle
+    cdef Particle_t pen
     cdef Particle_t* pos = getParticle(board, point.y, point.x)
-    if isValid(brush.particle, pos.pType):
-        if brush.particle == SAND:
-            particle = Sand(point.y, point.x, False, True)
-        elif brush.particle == WATER:
-            particle = Water(point.y, point.x, False, True)
-        elif brush.particle == WOOD:
-            particle = Wood(point.y, point.x, False, True)
-        elif brush.particle == FIRE:
-            particle = Fire(point.y, point.x, False, True)
-        elif brush.particle == SMOKE:
-            particle = Smoke(point.y, point.x, False, True)
-        elif brush.particle == EMPTY:
-            particle = Water(point.y, point.x, False, True)
-        setParticle(board, particle)
+    if isValid(brush.pen, pos.pType):
+        if brush.pen == SAND:
+            pen = Sand(point.y, point.x, False, True)
+        elif brush.pen == WATER:
+            pen = Water(point.y, point.x, False, True)
+        elif brush.pen == WOOD:
+            pen = Wood(point.y, point.x, False, True)
+        elif brush.pen == FIRE:
+            pen = Fire(point.y, point.x, False, True)
+        elif brush.pen == SMOKE:
+            pen = Smoke(point.y, point.x, False, True)
+        elif brush.pen == EMPTY:
+            pen = Water(point.y, point.x, False, True)
+        setParticle(board, pen)
 
 cdef void paintFromTo(Brush* brush, Board* board, vec* start, vec* end):
     cdef vec* point = interpolatePos(start, end)

@@ -77,25 +77,116 @@ cdef class Display:
             free(<void*>self.chunks[i])
         free(<void*>self.chunks)
 
-    cdef void paintParticles(self):
-        pass
+    cdef void _activateChunkOnDraw(self, ivec mousePos):
+        if self.lastMousePosition.y == -1 and self.lastMousePosition.x == -1:
+            self.lastMousePosition = mousePos
+
+        cdef ivec startChunkPos, endChunkPos, chunkPos
+        startChunkPos.y = self.lastMousePosition.y // self.chunkThreshold
+        startChunkPos.x = self.lastMousePosition.x // self.chunkThreshold
+
+        endChunkPos.y = mousePos.y // self.chunkThreshold
+        endChunkPos.x = mousePos.x // self.chunkThreshold
+        
+        for chunkPos in tools.interpolate_pos(startChunkPos, endChunkPos):
+            self.activateChunksAround(chunkPos.y, chunkPos.x)
+        self.lastMousePosition = mousePos
+
+    cpdef void paint_particles(self):
+        cdef ivec mousePos
+        cdef ParticleType tempPen
+
+        mp = py.mouse.get_pos()
+        mousePos.y = mp[1]
+        mousePos.x = mp[0]
+
+        mouseButtonPressed = py.mouse.get_pressed(num_buttons=3)
+        keysPressed = py.key.get_pressed()
+
+        if mouseButtonPressed[LEFT]:
+            # Draw Particles
+            paint(&self.brush, &self.board, mousePos, self.lastMousePosition)
+            # Activate chunks
+            self._activateChunkOnDraw(mousePos)
+        elif mouseButtonPressed[RIGHT]:
+            # Erase Particles
+            tempPen = self.brush.pen
+            self.brush.pen = EMPTY
+            paint(&self.brush, &self.board, mousePos)
+            self.brush.pen = tempPen
+            # Activate chunks
+            self._activateChunkOnDraw(self.lastMousePosition)
+        else:
+            self.lastMousePosition = None
+
+        if keysPressed[py.K_s]:
+            self.brush.pen = SAND
+        elif keysPressed[py.K_q]:
+            self.brush.pen = WOOD
+        elif keysPressed[py.K_w]:
+            self.brush.pen = WATER
+        elif keysPressed[py.K_e]:
+            self.brush.pen = FIRE
+        elif keysPressed[py.K_r]:
+            self.brush.pen = SMOKE
     
-    cdef void resizeCursor(self):
-        pass
+    cpdef void resize_cursor(self, int value):
+        self.brush.penSize += value
+
+    cpdef void draw_cursor(self):
+        py.draw.circle(self.win, (66, 66, 66), py.mouse.get_pos(), SCALE * self.brush.penSize, 2)
+
+    cdef void activateChunksAround(self, int row, int column):
+        activateChunk(&self.chunks[row][column])
+
+        if 0 <= row - 1 < self.chunkRows:
+            activateChunk(&self.chunks[row - 1][column])
+        if 0 <= row + 1 < self.chunkRows:
+            activateChunk(&self.chunks[row + 1][column])
+        if 0 <= column - 1 < self.chunkColumns:
+            activateChunk(&self.chunks[row][column - 1])
+        if 0 <= column + 1 < self.chunkColumns:
+            activateChunk(&self.chunks[row][column + 1])
     
-    cdef void activateChunkAround(self, int row, int column):
-        pass
+    cdef void onUpdateChunk(self, Chunk* chunk):
+        cdef bint haveMoved
+        cdef Particle_t* cell
+        cdef int i, j
+        for i in reversed(range(chunk.height)):
+            for j in range(chunk.width):
+                cell = getParticle(&self.board, chunk.y + i, chunk.x + j)
+                if cell.pType != EMPTY:
+                    haveMoved = onUpdate(cell, &self.board)
+                    if haveMoved:
+                        self.activateChunksAround(
+                            cell.pos.y // self.chunk_size, # row
+                            cell.pos.x // self.chunk_size  # column
+                        )
+
     
-    cdef void inUpdateChunk(self, Chunk* chunk):
-        pass
+    cpdef void update(self):
+        cdef Chunk* chunk
+        cdef int row, column
+        for row in reversed(range(self.chunkRows)):
+            for column in range(self.chunkColumns):
+                chunk = self.chunks[row][column]
+                if chunk.updateThisFrame:
+                    self.onUpdateChunk(chunk)
     
-    cdef void update(self):
-        pass
+    cpdef void redraw(self):
+        cdef Particle_t* cell
+        cdef int i, j
+        for i in range(self.board.height):
+            for j in range(self.board.width):
+                cell = getParticle(&self.board, i, j)
+                
+                self.surface.set_at((j, i), cell.color)
+                resetParticle(cell)
+                
+        surf = py.transform.scale(self.surface, (WX, WY))
+        self.win.blit(surf, (0, 0))
     
-    cdef void redraw(self):
-        pass
-    
-    cpdef void resetChunks(self):
+    cpdef void reset_chunks(self):
         cdef int row, column
         for row in range(self.chunkRows):
             for column in range(self.chunkColumns):

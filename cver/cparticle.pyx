@@ -70,6 +70,9 @@ cdef bint onUpdate(Particle_t* particle, Board* board):
 
     return hasBeenModified
 
+cdef void resetParticle(Particle_t* particle):
+    particle.been_updated = False
+
 
 ##### SAND
 cdef sandStep(Particle_t* particle):
@@ -237,7 +240,7 @@ cdef Particle_t Smoke(int y, int x, bint beenUpdated, bint isFalling):
 ##### EMPTY CELL
 cdef Particle_t Empty(int y, int x, bint beenUpdated, bint isFalling):
     cdef Particle_t empty
-    wood.pType = WOOD
+    wood.pType = EMPTY
     wood.color = 0x000000
 
     return empty
