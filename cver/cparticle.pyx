@@ -1,11 +1,11 @@
 import random
 from libc.stdio cimport printf
 
+from cparticle cimport *
+from tools cimport *
 
-cdef extern from "vector.h": *
 
-
-cdef int COLORS[][] = {  # R G B  24bits
+cdef int[5][4] COLORS = {  # R G B  24bits
     {0xE4EB15, 0xFFCD18, 0xC1C707, 0xE49009},  # Sand
     {0x0F5E9C, 0x1CA3EC, 0x2389DA, 0x5ABCD8},  # Water
     {0x461F00, 0x643D01, 0x8C6529, 0x000000},  # Wood
@@ -13,37 +13,6 @@ cdef int COLORS[][] = {  # R G B  24bits
     {0x0A0A0A, 0x232323, 0x2C2424, 0x000000}   # Smoke
 }
 
-
-ctypedef enum ParticleType:
-    SAND = 0
-    WATER
-    WOOD
-    FIRE
-    SMOKE
-    EMPTY
-
-
-cdef struct Particle_t:
-    bint beenUpdated
-    bint isFalling
-
-    ParticleType pType
-    int color
-
-    ivec pos
-    vec vel
-
-    float lifetime
-    float flammable
-    float heat
-    float friction
-    float inertialResistance
-    float bounciness
-    float density
-    int dispersion
-    float mass
-
-    bint(* step)(Particle_t*)
 
 cdef bint eqParticle(Particle_t* particle, Particle_t* other):
     if other.pType == EMPTY:
@@ -54,7 +23,7 @@ cdef bint eqParticle(Particle_t* particle, Particle_t* other):
     return False
 
 cdef void printParticle(Particle_t* particle):
-    printf("Particle at y=%d x=%d\n", particle.y, particle.x)
+    printf("Particle at y=%d x=%d\n", particle.pos.y, particle.pos.x)
 
 cdef void pushNeighbors(Particle_t* particle, Board* board):
     pass
@@ -66,16 +35,16 @@ cdef bint onUpdate(Particle_t* particle, Board* board):
         return False
     particle.beenUpdated = True
 
-    cdef bint hasBeenModified = particle.step()
+    cdef bint hasBeenModified = particle.step(particle)
 
     return hasBeenModified
 
 cdef void resetParticle(Particle_t* particle):
-    particle.been_updated = False
+    particle.beenUpdated = False
 
 
 ##### SAND
-cdef sandStep(Particle_t* particle):
+cdef bint sandStep(Particle_t* particle):
     pass
 
 cdef Particle_t Sand(int y, int x, bint beenUpdated, bint isFalling):
@@ -85,7 +54,7 @@ cdef Particle_t Sand(int y, int x, bint beenUpdated, bint isFalling):
     sand.isFalling = isFalling
 
     sand.pType = SAND
-    sand.color = COLORS[SAND][random.randint(0, 3)]
+    sand.color = COLORS[<int>SAND][random.randint(0, 3)]
 
     sand.pos.y = y
     sand.pos.x = x
@@ -96,7 +65,7 @@ cdef Particle_t Sand(int y, int x, bint beenUpdated, bint isFalling):
     sand.flammable = 100.0
     sand.heat = 0.0
     sand.friction = 0.75
-    sand.inertial_resistance = 0.5
+    sand.inertialResistance = 0.5
     sand.bounciness = 0.5
     sand.density = 0.0
     sand.dispersion = 0
@@ -108,7 +77,7 @@ cdef Particle_t Sand(int y, int x, bint beenUpdated, bint isFalling):
 
 
 ##### Water
-cdef waterStep(Particle_t* particle):
+cdef bint waterStep(Particle_t* particle):
     pass
 
 cdef Particle_t Water(int y, int x, bint beenUpdated, bint isFalling):
@@ -118,7 +87,7 @@ cdef Particle_t Water(int y, int x, bint beenUpdated, bint isFalling):
     water.isFalling = isFalling
 
     water.pType = WATER
-    water.color = COLORS[WATER][random.randint(0, 3)]
+    water.color = COLORS[<int>WATER][random.randint(0, 3)]
 
     water.pos.y = y
     water.pos.x = x
@@ -129,7 +98,7 @@ cdef Particle_t Water(int y, int x, bint beenUpdated, bint isFalling):
     water.flammable = 100.0
     water.heat = 0.0
     water.friction = 0.75
-    water.inertial_resistance = 0.5
+    water.inertialResistance = 0.5
     water.bounciness = 0.5
     water.density = 0.0
     water.dispersion = 0
@@ -141,7 +110,7 @@ cdef Particle_t Water(int y, int x, bint beenUpdated, bint isFalling):
 
 
 ##### WOOD
-cdef woodStep(Particle_t* particle):
+cdef bint woodStep(Particle_t* particle):
     pass
 
 cdef Particle_t Wood(int y, int x, bint beenUpdated, bint isFalling):
@@ -151,7 +120,7 @@ cdef Particle_t Wood(int y, int x, bint beenUpdated, bint isFalling):
     wood.isFalling = isFalling
 
     wood.pType = WOOD
-    wood.color = COLORS[WOOD][random.randint(0, 2)]
+    wood.color = COLORS[<int>WOOD][random.randint(0, 2)]
 
     wood.pos.y = y
     wood.pos.x = x
@@ -162,7 +131,7 @@ cdef Particle_t Wood(int y, int x, bint beenUpdated, bint isFalling):
     wood.flammable = 100.0
     wood.heat = 0.0
     wood.friction = 0.75
-    wood.inertial_resistance = 0.5
+    wood.inertialResistance = 0.5
     wood.bounciness = 0.5
     wood.density = 0.0
     wood.dispersion = 0
@@ -174,7 +143,7 @@ cdef Particle_t Wood(int y, int x, bint beenUpdated, bint isFalling):
 
 
 ##### Fire
-cdef fireStep(Particle_t* particle):
+cdef bint fireStep(Particle_t* particle):
     pass
 
 cdef Particle_t Fire(int y, int x, bint beenUpdated, bint isFalling):
@@ -184,7 +153,7 @@ cdef Particle_t Fire(int y, int x, bint beenUpdated, bint isFalling):
     fire.isFalling = isFalling
 
     fire.pType = FIRE
-    fire.color = COLORS[FIRE][random.randint(0, 2)]
+    fire.color = COLORS[<int>FIRE][random.randint(0, 2)]
 
     fire.pos.y = y
     fire.pos.x = x
@@ -195,7 +164,7 @@ cdef Particle_t Fire(int y, int x, bint beenUpdated, bint isFalling):
     fire.flammable = 100.0
     fire.heat = 0.0
     fire.friction = 0.75
-    fire.inertial_resistance = 0.5
+    fire.inertialResistance = 0.5
     fire.bounciness = 0.5
     fire.density = 0.0
     fire.dispersion = 0
@@ -206,7 +175,7 @@ cdef Particle_t Fire(int y, int x, bint beenUpdated, bint isFalling):
 
 
 ##### Smoke
-cdef smokeStep(Particle_t* particle):
+cdef bint smokeStep(Particle_t* particle):
     pass
 
 cdef Particle_t Smoke(int y, int x, bint beenUpdated, bint isFalling):
@@ -216,7 +185,7 @@ cdef Particle_t Smoke(int y, int x, bint beenUpdated, bint isFalling):
     smoke.isFalling = isFalling
 
     smoke.pType = SMOKE
-    smoke.color = COLORS[SMOKE][random.randint(0, 2)]
+    smoke.color = COLORS[<int>SMOKE][random.randint(0, 2)]
 
     smoke.pos.y = y
     smoke.pos.x = x
@@ -227,7 +196,7 @@ cdef Particle_t Smoke(int y, int x, bint beenUpdated, bint isFalling):
     smoke.flammable = 100.0
     smoke.heat = 0.0
     smoke.friction = 0.75
-    smoke.inertial_resistance = 0.5
+    smoke.inertialResistance = 0.5
     smoke.bounciness = 0.5
     smoke.density = 0.0
     smoke.dispersion = 0
@@ -240,7 +209,7 @@ cdef Particle_t Smoke(int y, int x, bint beenUpdated, bint isFalling):
 ##### EMPTY CELL
 cdef Particle_t Empty(int y, int x, bint beenUpdated, bint isFalling):
     cdef Particle_t empty
-    wood.pType = EMPTY
-    wood.color = 0x000000
+    empty.pType = EMPTY
+    empty.color = 0x000000
 
     return empty
