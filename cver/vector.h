@@ -1,3 +1,7 @@
+#ifndef VECTOR_H
+#define VECTOR_H
+
+
 #include <stdint.h>
 typedef enum { true, false } bool;
 
@@ -26,3 +30,6 @@ ivec roundv(vec* v);
 
 bool equalIVec(ivec* target, ivec* other);
 bool equalVec(vec* target, vec* other);
+
+
+#endif // VECTOR_H

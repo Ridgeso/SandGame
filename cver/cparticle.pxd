@@ -1,4 +1,5 @@
 from vector cimport *
+from tools cimport *
 
 cdef enum ParticleType:
     SAND,
@@ -30,6 +31,9 @@ cdef struct Particle_t:
     float mass
 
     bint(* step)(Particle_t*)
+
+cdef bint onUpdate(Particle_t* particle, Board* board)
+cdef void resetParticle(Particle_t* particle)
 
 cdef Particle_t Sand(int y, int x, bint beenUpdated, bint isFalling)
 cdef Particle_t Water(int y, int x, bint beenUpdated, bint isFalling)

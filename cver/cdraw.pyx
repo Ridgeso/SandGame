@@ -3,10 +3,10 @@ import pygame as pg
 
 from libc.stdio import printf
 from libc.stdlib import malloc, free
+
+from vector cimport *
 from cparticle cimport *
 from tools cimport *
-
-cdef extern from "vector.h": *
 
 
 ctypedef enum MouseKey:
@@ -41,55 +41,58 @@ cdef class Display:
         # Board
         self.board = initBoard(BOARD_Y, BOARD_X)
         self.brush = initBrush()
-        self.lastMousePosition = None
+
+        self.lastMousePosition.y = -1
+        self.lastMousePosition.x = -1
 
         # Chunks
         self.chunkSize = 10  # 10 x 10
         self.chunkRows = BOARD_Y / self.chunkSize
         self.chunkColumns = BOARD_X / self.chunkSize
 
-        self.chunks = <Chunk**>malloc(self.chunkRows * sizeof(Chunk*))
+        # self.chunks = <Chunk**>malloc(self.chunkRows * sizeof(Chunk*))
 
-        cdef int row, chunkHeight, chunkWidth, offset
-        # for row in range(0, BOARD_Y, self.chunkSize):
-        for row in range(self.chunkRows):
-            self.chunks[row] = <Chunk*>malloc(self.chunkColumns * sizeof(Chunk))
-            # max chunk size or chunk loss
-            offset = BOARD_Y - row * self.chunkSize
-            chunkHeight = self.chunkSize if offset > self.chunkSize else offset
-            # for column in range(0, BOARD_X, self.chunkSize):
-            for column in range(self.chunkColumns):
-                # max chunk size or chunk loss
-                offset = BOARD_X - row * self.chunkSize
-                chunk_width = self.chunkSize if offset > self.chunkSize else offset
-                self.chunks[row][column] = makeChunk(
-                    row * self.chunkSize, column * self.chunkSize,
-                    chunkHeight, chunkWidth
-                )
+        # cdef int row, chunkHeight, chunkWidth, offset
+        # # for row in range(0, BOARD_Y, self.chunkSize):
+        # for row in range(self.chunkRows):
+        #     self.chunks[row] = <Chunk*>malloc(self.chunkColumns * sizeof(Chunk))
+        #     # max chunk size or chunk loss
+        #     offset = BOARD_Y - row * self.chunkSize
+        #     chunkHeight = self.chunkSize if offset > self.chunkSize else offset
+        #     # for column in range(0, BOARD_X, self.chunkSize):
+        #     for column in range(self.chunkColumns):
+        #         # max chunk size or chunk loss
+        #         offset = BOARD_X - row * self.chunkSize
+        #         chunk_width = self.chunkSize if offset > self.chunkSize else offset
+        #         self.chunks[row][column] = makeChunk(
+        #             row * self.chunkSize, column * self.chunkSize,
+        #             chunkHeight, chunkWidth
+        #         )
             
-        self.chunkThreshold = SCALE * self.chunkSize
+        # self.chunkThreshold = SCALE * self.chunkSize
 
     def __dealloc__(self):
         freeBoard(&self.board)
 
-        cdef int i
-        for i in range(self.chunkRows):
-            free(<void*>self.chunks[i])
-        free(<void*>self.chunks)
+        # cdef int i
+        # for i in range(self.chunkRows):
+        #     free(<void*>self.chunks[i])
+        # free(<void*>self.chunks)
 
     cdef void _activateChunkOnDraw(self, ivec mousePos):
-        if self.lastMousePosition.y == -1 and self.lastMousePosition.x == -1:
-            self.lastMousePosition = mousePos
+        cdef ivec startChunkPos, endChunkPos
 
-        cdef ivec startChunkPos, endChunkPos, chunkPos
         startChunkPos.y = self.lastMousePosition.y // self.chunkThreshold
         startChunkPos.x = self.lastMousePosition.x // self.chunkThreshold
 
         endChunkPos.y = mousePos.y // self.chunkThreshold
         endChunkPos.x = mousePos.x // self.chunkThreshold
         
-        for chunkPos in tools.interpolate_pos(startChunkPos, endChunkPos):
+        cdef ivec* chunkPos = interpolatePos(&startChunkPos, &endChunkPos)
+        while chunkPos != NULL:
             self.activateChunksAround(chunkPos.y, chunkPos.x)
+            chunkPos = interpolatePos(NULL, &endChunkPos)
+        
         self.lastMousePosition = mousePos
 
     cpdef void paint_particles(self):
@@ -100,6 +103,9 @@ cdef class Display:
         mousePos.y = mp[1]
         mousePos.x = mp[0]
 
+        if self.lastMousePosition.y == -1 and self.lastMousePosition.x == -1:
+            self.lastMousePosition = mousePos
+
         mouseButtonPressed = py.mouse.get_pressed(num_buttons=3)
         keysPressed = py.key.get_pressed()
 
@@ -108,16 +114,23 @@ cdef class Display:
             paint(&self.brush, &self.board, mousePos, self.lastMousePosition)
             # Activate chunks
             self._activateChunkOnDraw(mousePos)
+            
+            self.lastMousePosition = mousePos
+
         elif mouseButtonPressed[RIGHT]:
             # Erase Particles
             tempPen = self.brush.pen
             self.brush.pen = EMPTY
-            paint(&self.brush, &self.board, mousePos)
+            paint(&self.brush, &self.board, mousePos, self.lastMousePosition)
             self.brush.pen = tempPen
             # Activate chunks
-            self._activateChunkOnDraw(self.lastMousePosition)
+            self._activateChunkOnDraw(mousePos)
+            
+            self.lastMousePosition = mousePos
+
         else:
-            self.lastMousePosition = None
+            self.lastMousePosition.y = -1
+            self.lastMousePosition.x = -1
 
         if keysPressed[py.K_s]:
             self.brush.pen = SAND
@@ -169,7 +182,7 @@ cdef class Display:
         cdef int row, column
         for row in reversed(range(self.chunkRows)):
             for column in range(self.chunkColumns):
-                chunk = self.chunks[row][column]
+                chunk = &self.chunks[row][column]
                 if chunk.updateThisFrame:
                     self.onUpdateChunk(chunk)
     

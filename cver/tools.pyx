@@ -5,7 +5,6 @@ from libc.stdlib cimport malloc, free
 
 from tools cimport *
 from cparticle cimport *
-from vector cimport *
 
 cdef extern from "math.h":
     const float INFINITY
@@ -52,10 +51,10 @@ cdef Board initBoard(int height, int width):
         
     return board
 
-cdef inline Particle_t* getParticle(Board* board, int y, int x):
-    return &board.board[y][x]
+# cdef inline Particle_t* getParticle(Board* board, int y, int x):
+#     return &board.board[y][x]
 
-cdef inline void setParticle(Board* board, int y, int x, Particle_t particle):
+cdef void setParticle(Board* board, int y, int x, Particle_t particle):
     board.board[y][x] = particle
 
 cdef void freeBoard(Board* board):
@@ -67,7 +66,7 @@ cdef void freeBoard(Board* board):
 cdef bint inBounds(Board* board, int y, int x):
     return 0 <= y < board.height and 0 <= x < board.width
 
-cdef void swap(Board* board, Particle_t* cell, int y, int x):
+cdef void swapParticles(Board* board, Particle_t* cell, int y, int x):
     cdef Particle_t* other = getParticle(board, y, x)
     
     board.board[cell.pos.y][cell.pos.x] = other[0]
@@ -202,16 +201,8 @@ cdef ivec* interpolatePos(ivec* start, ivec* end):
         cellDirection.x = 1 if slope.y > 0. else -1
 
         # Moving through plane
-        if slope.y == 0.0:
-            dx = INFINITY
-        else:
-            dx = slope.x/slope.y
-        if slope.x == 0.0:
-            dy = INFINITY
-        else:
-            dy = slope.y/slope.x  
-        # dx = slope.x/slope.y if slope.y != 0.0 else INFINITY
-        # dy = slope.y/slope.x if slope.x != 0.0 else INFINITY
+        dx = slope.x/slope.y if slope.y != 0.0 else INFINITY
+        dy = slope.y/slope.x if slope.x != 0.0 else INFINITY
 
         dist.x = dy
         unitDistance.y = length(&dist)  # dx for 1x
