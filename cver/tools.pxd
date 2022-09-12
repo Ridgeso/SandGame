@@ -19,8 +19,12 @@ cdef struct Board:
 
 cdef Board initBoard(int height, int width)
 cdef void freeBoard(Board* board)
+
 cdef inline Particle_t* getParticle(Board* board, int y, int x):
     return &board.board[y][x]
+
+cdef inline void setParticle(Board* board, int y, int x, Particle_t* particle):
+    board.board[y][x] = particle[0]
 
 
 cdef struct Brush:

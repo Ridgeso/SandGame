@@ -51,12 +51,6 @@ cdef Board initBoard(int height, int width):
         
     return board
 
-# cdef inline Particle_t* getParticle(Board* board, int y, int x):
-#     return &board.board[y][x]
-
-cdef void setParticle(Board* board, int y, int x, Particle_t particle):
-    board.board[y][x] = particle
-
 cdef void freeBoard(Board* board):
     cdef int i
     for i in range(board.height):
@@ -103,7 +97,7 @@ cdef void paintPoint(Brush* brush, Board* board, ivec* point):
             pen = Smoke(point.y, point.x, False, True)
         elif brush.pen == EMPTY:
             pen = Water(point.y, point.x, False, True)
-        setParticle(board, point.y, point.x, pen)
+        setParticle(board, point.y, point.x, &pen)
 
 cdef void paintFromTo(Brush* brush, Board* board, ivec* start, ivec* end):
     cdef ivec* point = interpolatePos(start, end)

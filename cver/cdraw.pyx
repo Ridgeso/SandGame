@@ -1,8 +1,8 @@
 from values import *
 import pygame as pg
 
-from libc.stdio import printf
-from libc.stdlib import malloc, free
+from libc.stdio cimport printf
+from libc.stdlib cimport malloc, free
 
 from vector cimport *
 from cparticle cimport *
@@ -50,43 +50,47 @@ cdef class Display:
         self.chunkRows = BOARD_Y / self.chunkSize
         self.chunkColumns = BOARD_X / self.chunkSize
 
-        # self.chunks = <Chunk**>malloc(self.chunkRows * sizeof(Chunk*))
+        self.chunks = <Chunk**>malloc(self.chunkRows * sizeof(Chunk*))
 
-        # cdef int row, chunkHeight, chunkWidth, offset
-        # # for row in range(0, BOARD_Y, self.chunkSize):
-        # for row in range(self.chunkRows):
-        #     self.chunks[row] = <Chunk*>malloc(self.chunkColumns * sizeof(Chunk))
-        #     # max chunk size or chunk loss
-        #     offset = BOARD_Y - row * self.chunkSize
-        #     chunkHeight = self.chunkSize if offset > self.chunkSize else offset
-        #     # for column in range(0, BOARD_X, self.chunkSize):
-        #     for column in range(self.chunkColumns):
-        #         # max chunk size or chunk loss
-        #         offset = BOARD_X - row * self.chunkSize
-        #         chunk_width = self.chunkSize if offset > self.chunkSize else offset
-        #         self.chunks[row][column] = makeChunk(
-        #             row * self.chunkSize, column * self.chunkSize,
-        #             chunkHeight, chunkWidth
-        #         )
+        cdef int row, column, chunkHeight, chunkWidth, offset
+        
+        # for row in range(0, BOARD_Y, self.chunkSize):
+        for row in range(self.chunkRows):
+            self.chunks[row] = <Chunk*>malloc(self.chunkColumns * sizeof(Chunk))
+
+            # max chunk size or chunk loss
+            offset = BOARD_Y - row * self.chunkSize
+            chunkHeight = self.chunkSize if offset > self.chunkSize else offset
             
-        # self.chunkThreshold = SCALE * self.chunkSize
+            # for column in range(0, BOARD_X, self.chunkSize):
+            for column in range(self.chunkColumns):
+                # max chunk size or chunk loss
+                offset = BOARD_X - row * self.chunkSize
+                chunk_width = self.chunkSize if offset > self.chunkSize else offset
+                
+                self.chunks[row][column] = makeChunk(
+                    row * self.chunkSize, column * self.chunkSize,
+                    chunkHeight, chunkWidth
+                )
+            
+        self.chunkThreshold = SCALE * self.chunkSize
 
     def __dealloc__(self):
         freeBoard(&self.board)
 
-        # cdef int i
-        # for i in range(self.chunkRows):
-        #     free(<void*>self.chunks[i])
-        # free(<void*>self.chunks)
+        cdef int i
+        for i in range(self.chunkRows):
+            free(<void*>self.chunks[i])
+        free(<void*>self.chunks)
 
     cdef void _activateChunkOnDraw(self, ivec mousePos):
         cdef ivec startChunkPos, endChunkPos
 
-        startChunkPos.y = self.lastMousePosition.y // self.chunkThreshold
-        startChunkPos.x = self.lastMousePosition.x // self.chunkThreshold
+        startChunkPos.y = self.lastMousePosition.y / self.chunkThreshold
+        startChunkPos.x = self.lastMousePosition.x / self.chunkThreshold
 
-        endChunkPos.y = mousePos.y // self.chunkThreshold
-        endChunkPos.x = mousePos.x // self.chunkThreshold
+        endChunkPos.y = mousePos.y / self.chunkThreshold
+        endChunkPos.x = mousePos.x / self.chunkThreshold
         
         cdef ivec* chunkPos = interpolatePos(&startChunkPos, &endChunkPos)
         while chunkPos != NULL:
@@ -172,8 +176,8 @@ cdef class Display:
                     haveMoved = onUpdate(cell, &self.board)
                     if haveMoved:
                         self.activateChunksAround(
-                            cell.pos.y // self.chunk_size, # row
-                            cell.pos.x // self.chunk_size  # column
+                            cell.pos.y / self.chunk_size, # row
+                            cell.pos.x / self.chunk_size  # column
                         )
 
     
