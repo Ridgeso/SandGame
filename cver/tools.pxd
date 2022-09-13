@@ -31,6 +31,7 @@ cdef struct Brush:
     ParticleType pen
     int penSize
 
+cdef Brush initBrush()
 cdef void paint(Brush* brush, Board* board, ivec mousePos, ivec lastMousePosition)
 
 

@@ -1,5 +1,5 @@
 from values import *
-import pygame as pg
+import pygame as py
 
 from libc.stdio cimport printf
 from libc.stdlib cimport malloc, free
@@ -34,7 +34,7 @@ cdef class Display:
         self.winY = x
 
         # Main window
-        self.win = py.display.set_mode((self.win_x, self.win_y))
+        self.win = py.display.set_mode((self.winX, self.winY))
         # Simulation Texture
         self.surface = py.Surface((BOARD_X, BOARD_Y))
 
@@ -66,7 +66,7 @@ cdef class Display:
             for column in range(self.chunkColumns):
                 # max chunk size or chunk loss
                 offset = BOARD_X - row * self.chunkSize
-                chunk_width = self.chunkSize if offset > self.chunkSize else offset
+                chunkWidth = self.chunkSize if offset > self.chunkSize else offset
                 
                 self.chunks[row][column] = makeChunk(
                     row * self.chunkSize, column * self.chunkSize,
@@ -74,6 +74,12 @@ cdef class Display:
                 )
             
         self.chunkThreshold = SCALE * self.chunkSize
+
+        cdef Chunk* test
+        for row in range(self.chunkRows):
+            for column in range(self.chunkColumns):
+                test = &self.chunks[row][column]
+                printf("Chunk %d %d %d %d\n", test.y, test.x, test.height, test.width)
 
     def __dealloc__(self):
         freeBoard(&self.board)

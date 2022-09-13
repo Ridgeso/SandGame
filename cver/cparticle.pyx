@@ -2,16 +2,15 @@ import random
 from libc.stdio cimport printf
 
 from cparticle cimport *
-from tools cimport *
 
 
-cdef int[5][4] COLORS = {  # R G B  24bits
-    {0xE4EB15, 0xFFCD18, 0xC1C707, 0xE49009},  # Sand
-    {0x0F5E9C, 0x1CA3EC, 0x2389DA, 0x5ABCD8},  # Water
-    {0x461F00, 0x643D01, 0x8C6529, 0x000000},  # Wood
-    {0xFF0000, 0xFF4500, 0xE25822, 0x000000},  # Fire
-    {0x0A0A0A, 0x232323, 0x2C2424, 0x000000}   # Smoke
-}
+cdef int[5][4] COLORS = [  # R G B  24bits
+    [0xE4EB15, 0xFFCD18, 0xC1C707, 0xE49009],  # Sand
+    [0x0F5E9C, 0x1CA3EC, 0x2389DA, 0x5ABCD8],  # Water
+    [0x461F00, 0x643D01, 0x8C6529, 0x000000],  # Wood
+    [0xFF0000, 0xFF4500, 0xE25822, 0x000000],  # Fire
+    [0x0A0A0A, 0x232323, 0x2C2424, 0x000000]   # Smoke
+]
 
 
 cdef bint eqParticle(Particle_t* particle, Particle_t* other):
@@ -55,6 +54,7 @@ cdef Particle_t Sand(int y, int x, bint beenUpdated, bint isFalling):
 
     sand.pType = SAND
     sand.color = COLORS[<int>SAND][random.randint(0, 3)]
+    # sand.color = COLORS[<int>SAND * 4 + random.randint(0, 3)]
 
     sand.pos.y = y
     sand.pos.x = x
@@ -88,6 +88,7 @@ cdef Particle_t Water(int y, int x, bint beenUpdated, bint isFalling):
 
     water.pType = WATER
     water.color = COLORS[<int>WATER][random.randint(0, 3)]
+    # water.color = COLORS[<int>WATER * 4 + random.randint(0, 3)]
 
     water.pos.y = y
     water.pos.x = x
@@ -121,6 +122,7 @@ cdef Particle_t Wood(int y, int x, bint beenUpdated, bint isFalling):
 
     wood.pType = WOOD
     wood.color = COLORS[<int>WOOD][random.randint(0, 2)]
+    # wood.color = COLORS[<int>WOOD * 4 + random.randint(0, 2)]
 
     wood.pos.y = y
     wood.pos.x = x
@@ -154,6 +156,7 @@ cdef Particle_t Fire(int y, int x, bint beenUpdated, bint isFalling):
 
     fire.pType = FIRE
     fire.color = COLORS[<int>FIRE][random.randint(0, 2)]
+    # fire.color = COLORS[<int>FIRE * 4 + random.randint(0, 2)]
 
     fire.pos.y = y
     fire.pos.x = x
@@ -186,6 +189,7 @@ cdef Particle_t Smoke(int y, int x, bint beenUpdated, bint isFalling):
 
     smoke.pType = SMOKE
     smoke.color = COLORS[<int>SMOKE][random.randint(0, 2)]
+    # smoke.color = COLORS[<int>SMOKE * 4 + random.randint(0, 2)]
 
     smoke.pos.y = y
     smoke.pos.x = x

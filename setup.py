@@ -1,36 +1,50 @@
 from setuptools import setup, find_packages, Extension
 from Cython.Build import cythonize
-import numpy
 
-vector = Extension(
-    name="vector",
-    sources=['cver/vector.c']
-)
 
-tools = Extension(
-    name="tools",
-    sources=['cver/tools.pyx', 'cver/vector.c']
-)
-
-particle = Extension(
-    name="particle",
-    sources=['cver/cparticle.pyx', 'cver/vector.c']
-)
-
-draw = Extension(
-    name="draw",
-    sources=['cver/cdraw.pyx']
-)
+app = [
+    Extension(
+        # "cdraw", ['cver/cdraw.pyx', 'cver/cparticle.pyx', 'cver/tools.pyx', 'cver/vector.c'],
+        "cver.cdraw", ['./cver/cdraw.pyx'],
+        include_dirs=["./cver"],
+        library_dirs=["./cver"]),
+    Extension(
+        "cver.cparticle", ['./cver/cparticle.pyx'],
+        include_dirs=["./cver"],
+        library_dirs=["./cver"]),
+    Extension(
+        "cver.tools", ['./cver/tools.pyx', './cver/vector.c'],
+        include_dirs=["./cver"],
+        library_dirs=["./cver"])
+]
 
 setup(
+    name="SandGameInCython",
     packages=find_packages(),
-    # ext_modules=cythonize(['cver/cparticle.pyx', 'cver/cdraw.pyx', 'cver/vector.c']),
-    ext_modules=cythonize([draw, particle, tools, vector]),
-    # ext_modules=cythonize([draw]),
-    include_dirs=[numpy.get_include()],
+    ext_modules=cythonize(app),
     options={
         "build": {
-            "build_lib": "cver"
+            "build_lib": "."
         }
     },
 )
+
+
+# from vector cimport *
+
+# cdef int[5][4] COLORS  # R G B  24bits
+# COLORS[0][:] = [0xE4EB15, 0xFFCD18, 0xC1C707, 0xE49009]  # Sand
+# COLORS[1][:] = [0x0F5E9C, 0x1CA3EC, 0x2389DA, 0x5ABCD8]  # Water
+# COLORS[2][:] = [0x461F00, 0x643D01, 0x8C6529, 0x000000]  # Wood
+# COLORS[3][:] = [0xFF0000, 0xFF4500, 0xE25822, 0x000000]  # Fire
+# COLORS[4][:] = [0x0A0A0A, 0x232323, 0x2C2424, 0x000000]  # Smoke
+
+
+
+# cdef int[5 * 4] COLORS = [ # R G B  24bits
+#     0xE4EB15, 0xFFCD18, 0xC1C707, 0xE49009,  # Sand
+#     0x0F5E9C, 0x1CA3EC, 0x2389DA, 0x5ABCD8,  # Water
+#     0x461F00, 0x643D01, 0x8C6529, 0x000000,  # Wood
+#     0xFF0000, 0xFF4500, 0xE25822, 0x000000,  # Fire
+#     0x0A0A0A, 0x232323, 0x2C2424, 0x000000  # Smoke
+# ]

@@ -1,7 +1,7 @@
 import pygame as py
 from values import *
-from src.draw import Display
-# from cver.cdraw import Display
+# from src.draw import Display
+from cver.cdraw import Display
 
 
 class SandSim:
@@ -12,7 +12,7 @@ class SandSim:
         self.clock = py.time.Clock()
 
         self.sim = True
-        self.is_running = True
+        self.is_running = False
 
     def run(self) -> None:
         while self.is_running:
