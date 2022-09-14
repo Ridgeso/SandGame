@@ -76,7 +76,7 @@ cdef void swapParticles(Board* board, Particle_t* cell, int y, int x):
 cdef Brush initBrush():
     cdef Brush brush
     brush.pen = SAND
-    brush.penSize = PAINT_SACLE
+    brush.penSize = PAINT_SCALE
     return brush
 
 cdef void paintPoint(Brush* brush, Board* board, ivec* point):

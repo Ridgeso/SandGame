@@ -75,12 +75,6 @@ cdef class Display:
             
         self.chunkThreshold = SCALE * self.chunkSize
 
-        cdef Chunk* test
-        for row in range(self.chunkRows):
-            for column in range(self.chunkColumns):
-                test = &self.chunks[row][column]
-                printf("Chunk %d %d %d %d\n", test.y, test.x, test.height, test.width)
-
     def __dealloc__(self):
         freeBoard(&self.board)
 
