@@ -1,5 +1,7 @@
 import random
-from libc.stdio cimport printf
+from values import *
+
+from libc.stdio cimport printf, puts
 
 from cparticle cimport *
 
@@ -14,6 +16,8 @@ cdef int[5][4] COLORS = [  # R G B  24bits
 
 
 cdef bint eqParticle(Particle_t* particle, Particle_t* other):
+    if particle == NULL or other == NULL:
+        return False
     if other.pType == EMPTY:
         return False
 
@@ -24,8 +28,21 @@ cdef bint eqParticle(Particle_t* particle, Particle_t* other):
 cdef void printParticle(Particle_t* particle):
     printf("Particle at y=%d x=%d\n", particle.pos.y, particle.pos.x)
 
-cdef void pushNeighbors(Particle_t* particle, Board* board):
-    pass
+cdef void pushNeighbors(Board* board, ParticleType particle, ivec* pos):
+    cdef Particle_t* left
+    cdef Particle_t* right
+
+    if inBounds(board, pos.y, pos.x - 1):
+        left = getParticle(board, pos.y, pos.x - 1)
+        if left.pType == particle:
+            if <float>random.random() > left.inertialResistance:
+                left.isFalling = True
+
+    if inBounds(board, pos.y, pos.x + 1):
+        right = getParticle(board, pos.y, pos.x + 1)
+        if right.pType == particle:
+            if <float>random.random() > right.inertialResistance:
+                right.isFalling = True
 
 cdef bint step(Particle_t* particle, Board* board):
     if particle.pType == SAND:
@@ -56,37 +73,142 @@ cdef void resetParticle(Particle_t* particle):
     particle.beenUpdated = False
 
 cdef bint isValid(ParticleType particle, ParticleType spot):
-    return True
-
+    if particle == SAND:
+        return sandIsValid(spot)
+    elif particle == WATER:
+        return waterIsValid(spot)
+    elif particle == WOOD:
+        return woodIsValid(spot)
+    elif particle == FIRE:
+        return fireIsValid(spot)
+    elif particle == SMOKE:
+        return smokeIsValid(spot)
+    elif particle == EMPTY:
+        return emptyIsValid(spot)
+    else:
+        return False
 
 ##### SAND
 cdef bint sandStep(Particle_t* particle, Board* board):
-    cdef bint hasBeenModified = False
-    cdef ivec nextPos = particle.pos
+    cdef bint onBreak = False
 
-    if inBounds(board, particle.pos.y + 1, particle.pos.x):
-        nextPos.y = particle.pos.y + 1
-        nextPos.x = particle.pos.x
-        hasBeenModified = True
-    elif inBounds(board, particle.pos.y + 1, particle.pos.x - 1):
-        nextPos.y = particle.pos.y + 1
-        nextPos.x = particle.pos.x - 1
-        hasBeenModified = True
-    elif inBounds(board, particle.pos.y + 1, particle.pos.x + 1):
-        nextPos.y = particle.pos.y + 1
-        nextPos.x = particle.pos.x + 1
-        hasBeenModified = True
+    cdef Particle_t* neighbor
+    cdef Particle_t* diagonalNeighbor = NULL
+    cdef Particle_t* nextNeighbor = NULL
+    cdef ivec diagonalNeighborPos, nextNeighborPos
+
+    cdef ivec nextPos = particle.pos
+    cdef ivec targetPosition
     
-    if hasBeenModified:
-        # printf("Moved from %d %d %d | ", particle.pType, particle.pos.y, particle.pos.x)
-        # board.board[nextPos.y][nextPos.x] = particle[0]
-        # particle.pos = nextPos
-        swapParticles(board, particle, nextPos.y, nextPos.x)
-        # printf("to %d %d %d\n", particle.pType, particle.pos.y, particle.pos.x)
-    
-    return hasBeenModified
+    cdef vec pos, additionalPos
+    cdef ivec* ipos
+    cdef ivec iadditionalPos
+
+    cdef float velOnHit, direction
+
+    particle.vel.y += <float>GRAVITY
+    if particle.isFalling:
+        particle.vel.x *= <float>AIR_FRICTION
+
+    targetPosition = roundv(&particle.vel)
+    targetPosition = iaddv(&particle.pos, &targetPosition)
+
+    interpolatePos(&particle.pos, &targetPosition)  # skipping current position
+    ipos = interpolatePos(NULL, &targetPosition)
+
+    while ipos != NULL:
+        if not inBounds(board, ipos.y, ipos.x):
+            particle.vel.y = 0
+            particle.vel.x = 0
+
+            onBreak = True
+            break
+
+        pos = ivec2vec(ipos)
+
+        neighbor = getParticle(board, ipos.y, ipos.x)
+        if sandIsValid(neighbor.pType):
+            nextPos = ipos[0]
+            pushNeighbors(board, SAND, &nextPos)
+        
+        else:
+            if particle.isFalling:
+                velOnHit = max(particle.vel.y * particle.bounciness, <float>3.0)
+                if particle.vel.x:
+                    particle.vel.x = velOnHit if particle.vel.x > 0.0 else -velOnHit
+                else:
+                    direction = <float>-1.0 if random.randint(0, 1) else <float>1.0
+                    particle.vel.x = velOnHit * direction
+
+            additionalPos = normalize(&particle.vel)
+
+            particle.vel.x *= particle.friction * neighbor.friction
+            velOnHit = (particle.vel.y + neighbor.vel.y) / 2
+            if velOnHit < <float>GRAVITY:
+                particle.vel.y = <float>GRAVITY
+            else:
+                particle.vel.y = velOnHit
+
+            neighbor.vel.y = particle.vel.y
+
+            if -0.1 < additionalPos.y < 0.1:
+                additionalPos.y = 0.0
+            else:
+                additionalPos.y = <float>-1.0 if additionalPos.y < 0.0 else <float>1.0
+            if -0.1 < additionalPos.x < 0.1:
+                additionalPos.x = 0.0
+            else:
+                additionalPos.x = <float>-1.0 if additionalPos.x < 0.0 else <float>1.0
+            iadditionalPos = vec2ivec(&additionalPos)
+
+            diagonalNeighborPos = iaddv(&nextPos, &iadditionalPos)
+            if inBounds(board, diagonalNeighborPos.y, diagonalNeighborPos.x):
+                diagonalNeighbor = getParticle(board, diagonalNeighborPos.y, diagonalNeighborPos.x)
+                if sandIsValid(diagonalNeighbor.pType):
+                    nextPos = diagonalNeighborPos
+
+                    onBreak = True
+                    break
+
+            iadditionalPos.x = 0
+            nextNeighborPos = iaddv(&nextPos, &iadditionalPos)
+            if inBounds(board, nextNeighborPos.y, nextNeighborPos.x):
+                nextNeighbor = getParticle(board, nextNeighborPos.y, nextNeighborPos.x)
+                if not eqParticle(nextNeighbor, diagonalNeighbor):
+                    if sandIsValid(nextNeighbor.pType):
+                        particle.isFalling = False
+                        nextPos = nextNeighborPos
+
+                        onBreak = True
+                        break
+
+                    else:
+                        particle.vel.x *= <float>-1.0
+
+            particle.isFalling = False
+
+            onBreak = True
+            break
+
+        ipos = interpolatePos(NULL, &targetPosition)
+
+    if not onBreak and inBounds(board, targetPosition.y, targetPosition.x):
+        neighbor = getParticle(board, targetPosition.y, targetPosition.x)
+        if sandIsValid(neighbor.pType):
+            particle.isFalling = True
+
+    if nextPos.y == particle.pos.y and nextPos.x == particle.pos.x:
+        particle.isFalling = False
+        particle.vel.y = 0
+        particle.vel.x = 0
+        return False
+
+    swapParticles(board, particle, nextPos.y, nextPos.x)
+    return True
 
 cdef bint sandIsValid(ParticleType other):
+    if other == EMPTY:
+        return True
     return False
 
 cdef Particle_t Sand(int y, int x, bint beenUpdated, bint isFalling):
@@ -253,6 +375,9 @@ cdef Particle_t Smoke(int y, int x, bint beenUpdated, bint isFalling):
 
 
 ##### EMPTY CELL
+cdef bint emptyIsValid(ParticleType other):
+    return True
+
 cdef Particle_t Empty(int y, int x, bint beenUpdated, bint isFalling):
     cdef Particle_t empty
 
@@ -270,9 +395,9 @@ cdef Particle_t Empty(int y, int x, bint beenUpdated, bint isFalling):
     empty.lifetime = 0.0
     empty.flammable = 0.0
     empty.heat = 0.0
-    empty.friction = 0.0
-    empty.inertialResistance = 0.0
-    empty.bounciness = 0.0
+    empty.friction = 1.0
+    empty.inertialResistance = 1.0
+    empty.bounciness = 1.0
     empty.density = 0.0
     empty.dispersion = 0
     empty.mass = 0.0

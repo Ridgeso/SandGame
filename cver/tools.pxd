@@ -11,6 +11,7 @@ cdef struct Chunk:
 cdef Chunk makeChunk(int y, int x, int height, int width)
 cdef void updateChunk(Chunk* chunk)
 cdef void activateChunk(Chunk* chunk)
+cdef void printChunk(Chunk* chunk)
 
 
 cdef struct Board:
