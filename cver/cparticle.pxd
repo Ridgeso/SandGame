@@ -31,7 +31,6 @@ cdef struct Particle_t:
     int dispersion
     float mass
 
-cdef bint step(Particle_t* particle)
 cdef bint onUpdate(Particle_t* particle, Board* board)
 cdef void resetParticle(Particle_t* particle)
 cdef bint isValid(ParticleType particle, ParticleType spot)

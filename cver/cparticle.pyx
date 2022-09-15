@@ -27,8 +27,19 @@ cdef void printParticle(Particle_t* particle):
 cdef void pushNeighbors(Particle_t* particle, Board* board):
     pass
 
-cdef bint step(Particle_t* particle):
-    return False
+cdef bint step(Particle_t* particle, Board* board):
+    if particle.pType == SAND:
+        return sandStep(particle, board)
+    elif particle.pType == WATER:
+        return waterStep(particle, board)
+    elif particle.pType == WOOD:
+        return woodStep(particle, board)
+    elif particle.pType == FIRE:
+        return fireStep(particle, board)
+    elif particle.pType == SMOKE:
+        return smokeStep(particle, board)
+    else:
+        return False
 
 cdef bint onUpdate(Particle_t* particle, Board* board):
     if particle.pType == EMPTY:
@@ -37,7 +48,7 @@ cdef bint onUpdate(Particle_t* particle, Board* board):
         return False
     particle.beenUpdated = True
 
-    cdef bint hasBeenModified = step(particle)
+    cdef bint hasBeenModified = step(particle, board)
 
     return hasBeenModified
 
@@ -49,8 +60,31 @@ cdef bint isValid(ParticleType particle, ParticleType spot):
 
 
 ##### SAND
-cdef bint sandStep(Particle_t* particle):
-    pass
+cdef bint sandStep(Particle_t* particle, Board* board):
+    cdef bint hasBeenModified = False
+    cdef ivec nextPos = particle.pos
+
+    if inBounds(board, particle.pos.y + 1, particle.pos.x):
+        nextPos.y = particle.pos.y + 1
+        nextPos.x = particle.pos.x
+        hasBeenModified = True
+    elif inBounds(board, particle.pos.y + 1, particle.pos.x - 1):
+        nextPos.y = particle.pos.y + 1
+        nextPos.x = particle.pos.x - 1
+        hasBeenModified = True
+    elif inBounds(board, particle.pos.y + 1, particle.pos.x + 1):
+        nextPos.y = particle.pos.y + 1
+        nextPos.x = particle.pos.x + 1
+        hasBeenModified = True
+    
+    if hasBeenModified:
+        # printf("Moved from %d %d %d | ", particle.pType, particle.pos.y, particle.pos.x)
+        # board.board[nextPos.y][nextPos.x] = particle[0]
+        # particle.pos = nextPos
+        swapParticles(board, particle, nextPos.y, nextPos.x)
+        # printf("to %d %d %d\n", particle.pType, particle.pos.y, particle.pos.x)
+    
+    return hasBeenModified
 
 cdef bint sandIsValid(ParticleType other):
     return False
@@ -63,7 +97,6 @@ cdef Particle_t Sand(int y, int x, bint beenUpdated, bint isFalling):
 
     sand.pType = SAND
     sand.color = COLORS[<int>SAND][random.randint(0, 3)]
-    # sand.color = COLORS[<int>SAND * 4 + random.randint(0, 3)]
 
     sand.pos.y = y
     sand.pos.x = x
@@ -84,8 +117,8 @@ cdef Particle_t Sand(int y, int x, bint beenUpdated, bint isFalling):
 
 
 ##### Water
-cdef bint waterStep(Particle_t* particle):
-    pass
+cdef bint waterStep(Particle_t* particle, Board* board):
+    return False
 
 cdef bint waterIsValid(ParticleType other):
     return False
@@ -98,7 +131,6 @@ cdef Particle_t Water(int y, int x, bint beenUpdated, bint isFalling):
 
     water.pType = WATER
     water.color = COLORS[<int>WATER][random.randint(0, 3)]
-    # water.color = COLORS[<int>WATER * 4 + random.randint(0, 3)]
 
     water.pos.y = y
     water.pos.x = x
@@ -119,8 +151,8 @@ cdef Particle_t Water(int y, int x, bint beenUpdated, bint isFalling):
 
 
 ##### WOOD
-cdef bint woodStep(Particle_t* particle):
-    pass
+cdef bint woodStep(Particle_t* particle, Board* board):
+    return False
 
 cdef bint woodIsValid(ParticleType other):
     return False
@@ -133,7 +165,6 @@ cdef Particle_t Wood(int y, int x, bint beenUpdated, bint isFalling):
 
     wood.pType = WOOD
     wood.color = COLORS[<int>WOOD][random.randint(0, 2)]
-    # wood.color = COLORS[<int>WOOD * 4 + random.randint(0, 2)]
 
     wood.pos.y = y
     wood.pos.x = x
@@ -154,8 +185,8 @@ cdef Particle_t Wood(int y, int x, bint beenUpdated, bint isFalling):
 
 
 ##### Fire
-cdef bint fireStep(Particle_t* particle):
-    pass
+cdef bint fireStep(Particle_t* particle, Board* board):
+    return False
 
 cdef bint fireIsValid(ParticleType other):
     return False
@@ -168,7 +199,6 @@ cdef Particle_t Fire(int y, int x, bint beenUpdated, bint isFalling):
 
     fire.pType = FIRE
     fire.color = COLORS[<int>FIRE][random.randint(0, 2)]
-    # fire.color = COLORS[<int>FIRE * 4 + random.randint(0, 2)]
 
     fire.pos.y = y
     fire.pos.x = x
@@ -189,8 +219,8 @@ cdef Particle_t Fire(int y, int x, bint beenUpdated, bint isFalling):
 
 
 ##### Smoke
-cdef bint smokeStep(Particle_t* particle):
-    pass
+cdef bint smokeStep(Particle_t* particle, Board* board):
+    return False
 
 cdef bint smokeIsValid(ParticleType other):
     return False
@@ -203,7 +233,6 @@ cdef Particle_t Smoke(int y, int x, bint beenUpdated, bint isFalling):
 
     smoke.pType = SMOKE
     smoke.color = COLORS[<int>SMOKE][random.randint(0, 2)]
-    # smoke.color = COLORS[<int>SMOKE * 4 + random.randint(0, 2)]
 
     smoke.pos.y = y
     smoke.pos.x = x
@@ -226,7 +255,27 @@ cdef Particle_t Smoke(int y, int x, bint beenUpdated, bint isFalling):
 ##### EMPTY CELL
 cdef Particle_t Empty(int y, int x, bint beenUpdated, bint isFalling):
     cdef Particle_t empty
+
+    empty.beenUpdated = beenUpdated
+    empty.isFalling = isFalling
+
     empty.pType = EMPTY
     empty.color = 0x000000
+
+    empty.pos.y = y
+    empty.pos.x = x
+    empty.vel.y = 0.0
+    empty.vel.x = 0.0
+    
+    empty.lifetime = 0.0
+    empty.flammable = 0.0
+    empty.heat = 0.0
+    empty.friction = 0.0
+    empty.inertialResistance = 0.0
+    empty.bounciness = 0.0
+    empty.density = 0.0
+    empty.dispersion = 0
+    empty.mass = 0.0
+
 
     return empty

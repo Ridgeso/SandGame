@@ -19,6 +19,10 @@ cdef struct Board:
 
 cdef Board initBoard(int height, int width)
 cdef void freeBoard(Board* board)
+cdef void swapParticles(Board* board, Particle_t* cell, int y, int x)
+
+cdef inline bint inBounds(Board* board, int y, int x):
+    return 0 <= y < board.height and 0 <= x < board.width
 
 cdef inline Particle_t* getParticle(Board* board, int y, int x):
     return &board.board[y][x]

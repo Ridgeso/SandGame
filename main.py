@@ -18,8 +18,8 @@ class SandSim:
         while self.is_running:
             self.clock.tick(FPS)
 
-            # if self.sim:
-            #     self.display.update()
+            if self.sim:
+                self.display.update()
 
             self.display.paint_particles()
             self.display.redraw()

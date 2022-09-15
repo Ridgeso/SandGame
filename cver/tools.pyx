@@ -58,26 +58,23 @@ cdef void freeBoard(Board* board):
         free(<void*>board.board[i])
     free(<void*>board.board)
 
-cdef bint inBounds(Board* board, int y, int x):
-    return 0 <= y < board.height and 0 <= x < board.width
-
 cdef void swapParticles(Board* board, Particle_t* cell, int y, int x):
-    cdef Particle_t* other = getParticle(board, y, x)
+    cdef Particle_t swapCell = getParticle(board, y, x)[0]  # Copying the Cell to swap
     
-    board.board[cell.pos.y][cell.pos.x] = other[0]
-    board.board[y][x] = cell[0]
-
-    other.pos = cell.pos
+    swapCell.pos = cell.pos
 
     cell.pos.y = y
     cell.pos.x = x
+    
+    board.board[y][x] = cell[0]
+    board.board[swapCell.pos.y][swapCell.pos.x] = swapCell
 
 
 ##### BRUSH
 cdef Brush initBrush():
     cdef Brush brush
     brush.pen = SAND
-    brush.penSize = PAINT_SCALE
+    brush.penSize = <int>PAINT_SCALE
     return brush
 
 cdef void paintPoint(Brush* brush, Board* board, ivec* point):
