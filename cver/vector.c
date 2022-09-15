@@ -1,3 +1,5 @@
+#include <stdio.h>
+
 #include <math.h>
 #include "vector.h"
 
@@ -42,14 +44,14 @@ ivec vec2ivec(vec* v) {
 }
 
 float length(vec* v) {
-    float l = sqrtf(v->y * v->y + v->x + v->x);
+    float l = sqrtf(v->y * v->y + v->x * v->x);
     return l;
 }
 
 vec normalize(vec* v) {
     vec r = {0.0, 0.0};
     float l = length(v);
-    if (length) {
+    if (l) {
         r.y = v->y / l;
         r.x = v->x / l;
     }

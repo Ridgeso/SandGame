@@ -12,14 +12,14 @@ class SandSim:
         self.clock = py.time.Clock()
 
         self.sim = True
-        self.is_running = False
+        self.is_running = True
 
     def run(self) -> None:
         while self.is_running:
             self.clock.tick(FPS)
 
-            if self.sim:
-                self.display.update()
+            # if self.sim:
+            #     self.display.update()
 
             self.display.paint_particles()
             self.display.redraw()

@@ -40,6 +40,15 @@ cdef class Display:
 
         # Board
         self.board = initBoard(BOARD_Y, BOARD_X)
+        cdef Particle_t s = Sand(10, 10, False, True)
+        setParticle(&self.board, 10, 10, &s)
+        s = Sand(22, 22, False, True)
+        setParticle(&self.board, 22, 22, &s)
+        s = Sand(25, 25, False, True)
+        setParticle(&self.board, 25, 25, &s)
+        s = Sand(24, 24, False, True)
+        setParticle(&self.board, 24, 24, &s)
+
         self.brush = initBrush()
 
         self.lastMousePosition.y = -1
@@ -73,7 +82,7 @@ cdef class Display:
                     chunkHeight, chunkWidth
                 )
             
-        self.chunkThreshold = SCALE * self.chunkSize
+        self.chunkThreshold = <int>SCALE * self.chunkSize
 
     def __dealloc__(self):
         freeBoard(&self.board)
@@ -148,7 +157,8 @@ cdef class Display:
             self.brush.pen = SMOKE
     
     cpdef void resize_cursor(self, int value):
-        self.brush.penSize += value
+        if 0 < self.brush.penSize + value < 50:
+            self.brush.penSize += value
 
     cpdef void draw_cursor(self):
         py.draw.circle(self.win, (66, 66, 66), py.mouse.get_pos(), SCALE * self.brush.penSize, 2)
@@ -176,11 +186,10 @@ cdef class Display:
                     haveMoved = onUpdate(cell, &self.board)
                     if haveMoved:
                         self.activateChunksAround(
-                            cell.pos.y / self.chunk_size, # row
-                            cell.pos.x / self.chunk_size  # column
+                            cell.pos.y / self.chunkSize, # row
+                            cell.pos.x / self.chunkSize  # column
                         )
 
-    
     cpdef void update(self):
         cdef Chunk* chunk
         cdef int row, column
@@ -202,7 +211,21 @@ cdef class Display:
                 
         surf = py.transform.scale(self.surface, (WX, WY))
         self.win.blit(surf, (0, 0))
-    
+        
+        cdef int[2][2] chunkRect
+        cdef Chunk* chunk
+        cdef int color
+        if DEBUG:
+            for i in range(self.chunkRows):
+                for j in range(self.chunkColumns):
+                    chunk = &self.chunks[i][j]
+                    
+                    chunkRect = [[chunk.x * <int>SCALE,     chunk.y * <int>SCALE],
+                                 [chunk.width * <int>SCALE, chunk.height * <int>SCALE]]
+                                
+                    color = 0x00FF00 if chunk.updateThisFrame else 0xFF0000
+                    py.draw.rect(self.win, color, chunkRect, 1)
+
     cpdef void reset_chunks(self):
         cdef int row, column
         for row in range(self.chunkRows):

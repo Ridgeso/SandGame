@@ -3,7 +3,7 @@
 
 
 #include <stdint.h>
-typedef enum { true, false } bool;
+typedef enum { false, true } bool;
 
 typedef struct ivec {
     int32_t y, x;

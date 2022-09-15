@@ -9,6 +9,7 @@ from cparticle cimport *
 cdef extern from "math.h":
     const float INFINITY
     double sqrt(double)
+    double round(double y)
 
 
 #### CHUNK
@@ -82,22 +83,22 @@ cdef Brush initBrush():
 cdef void paintPoint(Brush* brush, Board* board, ivec* point):
     if not inBounds(board, point.y, point.x):
         return
-    cdef Particle_t pen
+    cdef Particle_t newParticle
     cdef Particle_t* pos = getParticle(board, point.y, point.x)
     if isValid(brush.pen, pos.pType):
         if brush.pen == SAND:
-            pen = Sand(point.y, point.x, False, True)
+            newParticle = Sand(point.y, point.x, False, True)
         elif brush.pen == WATER:
-            pen = Water(point.y, point.x, False, True)
+            newParticle = Water(point.y, point.x, False, True)
         elif brush.pen == WOOD:
-            pen = Wood(point.y, point.x, False, True)
+            newParticle = Wood(point.y, point.x, False, True)
         elif brush.pen == FIRE:
-            pen = Fire(point.y, point.x, False, True)
+            newParticle = Fire(point.y, point.x, False, True)
         elif brush.pen == SMOKE:
-            pen = Smoke(point.y, point.x, False, True)
+            newParticle = Smoke(point.y, point.x, False, True)
         elif brush.pen == EMPTY:
-            pen = Water(point.y, point.x, False, True)
-        setParticle(board, point.y, point.x, &pen)
+            newParticle = Empty(point.y, point.x, False, True)
+        setParticle(board, point.y, point.x, &newParticle)
 
 cdef void paintFromTo(Brush* brush, Board* board, ivec* start, ivec* end):
     cdef ivec* point = interpolatePos(start, end)
@@ -106,9 +107,11 @@ cdef void paintFromTo(Brush* brush, Board* board, ivec* start, ivec* end):
         point = interpolatePos(NULL, end)
 
 cdef void paint(Brush* brush, Board* board, ivec mousePos, ivec lastMousePosition):
-    mousePos.y /= SCALE
-    mousePos.x /= SCALE
-    
+    mousePos.y /= <int>SCALE
+    mousePos.x /= <int>SCALE
+    lastMousePosition.y /= <int>SCALE
+    lastMousePosition.x /= <int>SCALE
+
     cdef vec fmousePos = ivec2vec(&mousePos)
     cdef vec flastMousePosition = ivec2vec(&lastMousePosition)
     
@@ -135,7 +138,7 @@ cdef void paint(Brush* brush, Board* board, ivec mousePos, ivec lastMousePositio
     cdef int cy, cx, radius
     cdef ivec point, lastPoint, r_phi
     for cy in range(-brush.penSize, brush.penSize):
-        radius = <int>sqrt(brush.penSize * brush.penSize - cy * cy)
+        radius = <int>round(sqrt(brush.penSize * brush.penSize - cy * cy))
         for cx in range(-radius, radius):
             r_phi.y = cy
             r_phi.x = cx
@@ -168,7 +171,6 @@ cdef ivec* interpolatePos(ivec* start, ivec* end):
     cdef float dy, dx
 
     cdef vec dist
-    dist.y = 1
 
     if start == NULL:
         if equalIVec(out, end):
@@ -185,18 +187,20 @@ cdef ivec* interpolatePos(ivec* start, ivec* end):
         return out
     
     else:
+        dist.y = 1
+
         fstart = ivec2vec(start)
         fend = ivec2vec(end)
         slope = subv(&fend, &fstart)
         slope = normalize(&slope)
 
         # Moving through cells
-        cellDirection.y = 1 if slope.x > 0. else -1
-        cellDirection.x = 1 if slope.y > 0. else -1
+        cellDirection.y = 1 if slope.y > 0. else -1
+        cellDirection.x = 1 if slope.x > 0. else -1
 
         # Moving through plane
-        dx = slope.x/slope.y if slope.y != 0.0 else INFINITY
-        dy = slope.y/slope.x if slope.x != 0.0 else INFINITY
+        dy = slope.x/slope.y if slope.y != 0.0 else INFINITY
+        dx = slope.y/slope.x if slope.x != 0.0 else INFINITY
 
         dist.x = dy
         unitDistance.y = length(&dist)  # dx for 1x

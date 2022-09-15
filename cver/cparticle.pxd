@@ -31,10 +31,10 @@ cdef struct Particle_t:
     int dispersion
     float mass
 
-    bint(* step)(Particle_t*)
-
+cdef bint step(Particle_t* particle)
 cdef bint onUpdate(Particle_t* particle, Board* board)
 cdef void resetParticle(Particle_t* particle)
+cdef bint isValid(ParticleType particle, ParticleType spot)
 
 cdef Particle_t Sand(int y, int x, bint beenUpdated, bint isFalling)
 cdef Particle_t Water(int y, int x, bint beenUpdated, bint isFalling)

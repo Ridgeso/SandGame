@@ -27,6 +27,9 @@ cdef void printParticle(Particle_t* particle):
 cdef void pushNeighbors(Particle_t* particle, Board* board):
     pass
 
+cdef bint step(Particle_t* particle):
+    return False
+
 cdef bint onUpdate(Particle_t* particle, Board* board):
     if particle.pType == EMPTY:
         return False
@@ -34,17 +37,23 @@ cdef bint onUpdate(Particle_t* particle, Board* board):
         return False
     particle.beenUpdated = True
 
-    cdef bint hasBeenModified = particle.step(particle)
+    cdef bint hasBeenModified = step(particle)
 
     return hasBeenModified
 
 cdef void resetParticle(Particle_t* particle):
     particle.beenUpdated = False
 
+cdef bint isValid(ParticleType particle, ParticleType spot):
+    return True
+
 
 ##### SAND
 cdef bint sandStep(Particle_t* particle):
     pass
+
+cdef bint sandIsValid(ParticleType other):
+    return False
 
 cdef Particle_t Sand(int y, int x, bint beenUpdated, bint isFalling):
     cdef Particle_t sand
@@ -71,14 +80,15 @@ cdef Particle_t Sand(int y, int x, bint beenUpdated, bint isFalling):
     sand.dispersion = 0
     sand.mass = 54.0
 
-    sand.step = &sandStep
-
     return sand
 
 
 ##### Water
 cdef bint waterStep(Particle_t* particle):
     pass
+
+cdef bint waterIsValid(ParticleType other):
+    return False
 
 cdef Particle_t Water(int y, int x, bint beenUpdated, bint isFalling):
     cdef Particle_t water
@@ -105,14 +115,15 @@ cdef Particle_t Water(int y, int x, bint beenUpdated, bint isFalling):
     water.dispersion = 0
     water.mass = 54.0
 
-    water.step = &waterStep
-
     return water
 
 
 ##### WOOD
 cdef bint woodStep(Particle_t* particle):
     pass
+
+cdef bint woodIsValid(ParticleType other):
+    return False
 
 cdef Particle_t Wood(int y, int x, bint beenUpdated, bint isFalling):
     cdef Particle_t wood
@@ -139,14 +150,15 @@ cdef Particle_t Wood(int y, int x, bint beenUpdated, bint isFalling):
     wood.dispersion = 0
     wood.mass = 54.0
 
-    wood.step = &woodStep
-
     return wood
 
 
 ##### Fire
 cdef bint fireStep(Particle_t* particle):
     pass
+
+cdef bint fireIsValid(ParticleType other):
+    return False
 
 cdef Particle_t Fire(int y, int x, bint beenUpdated, bint isFalling):
     cdef Particle_t fire
@@ -173,13 +185,15 @@ cdef Particle_t Fire(int y, int x, bint beenUpdated, bint isFalling):
     fire.dispersion = 0
     fire.mass = 54.0
 
-    fire.step = &fireStep
     return fire
 
 
 ##### Smoke
 cdef bint smokeStep(Particle_t* particle):
     pass
+
+cdef bint smokeIsValid(ParticleType other):
+    return False
 
 cdef Particle_t Smoke(int y, int x, bint beenUpdated, bint isFalling):
     cdef Particle_t smoke
@@ -206,7 +220,6 @@ cdef Particle_t Smoke(int y, int x, bint beenUpdated, bint isFalling):
     smoke.dispersion = 0
     smoke.mass = 54.0
 
-    smoke.step = &smokeStep
     return smoke
 
 
