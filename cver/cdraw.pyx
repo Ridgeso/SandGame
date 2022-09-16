@@ -40,15 +40,6 @@ cdef class Display:
 
         # Board
         self.board = initBoard(BOARD_Y, BOARD_X)
-        cdef Particle_t s = Sand(10, 10, False, True)
-        setParticle(&self.board, 10, 10, &s)
-        s = Sand(22, 22, False, True)
-        setParticle(&self.board, 22, 22, &s)
-        s = Sand(25, 25, False, True)
-        setParticle(&self.board, 25, 25, &s)
-        s = Sand(24, 24, False, True)
-        setParticle(&self.board, 24, 24, &s)
-
         self.brush = initBrush()
 
         self.lastMousePosition.y = -1
@@ -101,10 +92,10 @@ cdef class Display:
         endChunkPos.y = mousePos.y / self.chunkThreshold
         endChunkPos.x = mousePos.x / self.chunkThreshold
         
-        cdef ivec* chunkPos = interpolatePos(&startChunkPos, &endChunkPos)
+        cdef ivec* chunkPos = interpolatePos(&startChunkPos, &endChunkPos, 0)
         while chunkPos != NULL:
             self.activateChunksAround(chunkPos.y, chunkPos.x)
-            chunkPos = interpolatePos(NULL, &endChunkPos)
+            chunkPos = interpolatePos(NULL, &endChunkPos, 0)
         
         self.lastMousePosition = mousePos
 

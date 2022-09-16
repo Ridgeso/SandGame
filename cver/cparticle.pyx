@@ -92,7 +92,7 @@ cdef bint isValid(ParticleType particle, ParticleType spot):
 cdef bint sandStep(Particle_t* particle, Board* board):
     cdef bint onBreak = False
 
-    cdef Particle_t* neighbor
+    cdef Particle_t* neighbor = NULL
     cdef Particle_t* diagonalNeighbor = NULL
     cdef Particle_t* nextNeighbor = NULL
     cdef ivec diagonalNeighborPos, nextNeighborPos
@@ -101,7 +101,7 @@ cdef bint sandStep(Particle_t* particle, Board* board):
     cdef ivec targetPosition
     
     cdef vec pos, additionalPos
-    cdef ivec* ipos
+    cdef ivec* ipos = NULL
     cdef ivec iadditionalPos
 
     cdef float velOnHit, direction
@@ -113,8 +113,8 @@ cdef bint sandStep(Particle_t* particle, Board* board):
     targetPosition = roundv(&particle.vel)
     targetPosition = iaddv(&particle.pos, &targetPosition)
 
-    interpolatePos(&particle.pos, &targetPosition)  # skipping current position
-    ipos = interpolatePos(NULL, &targetPosition)
+    interpolatePos(&particle.pos, &targetPosition, 0)  # skipping current position
+    ipos = interpolatePos(NULL, &targetPosition, 0)
 
     while ipos != NULL:
         if not inBounds(board, ipos.y, ipos.x):
@@ -143,7 +143,7 @@ cdef bint sandStep(Particle_t* particle, Board* board):
             additionalPos = normalize(&particle.vel)
 
             particle.vel.x *= particle.friction * neighbor.friction
-            velOnHit = (particle.vel.y + neighbor.vel.y) / 2
+            velOnHit = (particle.vel.y + neighbor.vel.y) / <float>2
             if velOnHit < <float>GRAVITY:
                 particle.vel.y = <float>GRAVITY
             else:
@@ -159,7 +159,7 @@ cdef bint sandStep(Particle_t* particle, Board* board):
                 additionalPos.x = 0.0
             else:
                 additionalPos.x = <float>-1.0 if additionalPos.x < 0.0 else <float>1.0
-            iadditionalPos = vec2ivec(&additionalPos)
+            iadditionalPos = roundv(&additionalPos)
 
             diagonalNeighborPos = iaddv(&nextPos, &iadditionalPos)
             if inBounds(board, diagonalNeighborPos.y, diagonalNeighborPos.x):
@@ -190,7 +190,7 @@ cdef bint sandStep(Particle_t* particle, Board* board):
             onBreak = True
             break
 
-        ipos = interpolatePos(NULL, &targetPosition)
+        ipos = interpolatePos(NULL, &targetPosition, 0)
 
     if not onBreak and inBounds(board, targetPosition.y, targetPosition.x):
         neighbor = getParticle(board, targetPosition.y, targetPosition.x)
@@ -207,9 +207,11 @@ cdef bint sandStep(Particle_t* particle, Board* board):
     return True
 
 cdef bint sandIsValid(ParticleType other):
-    if other == EMPTY:
-        return True
-    return False
+    if other == SAND:
+        return False
+    if other == WOOD:
+        return False
+    return True
 
 cdef Particle_t Sand(int y, int x, bint beenUpdated, bint isFalling):
     cdef Particle_t sand
@@ -240,10 +242,159 @@ cdef Particle_t Sand(int y, int x, bint beenUpdated, bint isFalling):
 
 ##### Water
 cdef bint waterStep(Particle_t* particle, Board* board):
-    return False
+    cdef bint onBreak = False
+    cdef bint goOut
+
+    cdef Particle_t* neighbor = NULL
+    cdef Particle_t* diagonalNeighbor = NULL
+    cdef Particle_t* nextNeighbor = NULL
+    cdef ivec diagonalNeighborPos, nextNeighborPos
+
+    cdef ivec nextPos = particle.pos
+    cdef ivec targetPosition, newTarget
+    
+    cdef vec pos, additionalPos
+    cdef ivec* ipos = NULL
+    cdef ivec* newPos = NULL
+    cdef ivec iadditionalPos
+
+    cdef float velOnHit, direction
+
+    particle.vel.y += <float>GRAVITY
+    if particle.isFalling:
+        particle.vel.x *= <float>AIR_FRICTION
+
+    targetPosition = roundv(&particle.vel)
+    targetPosition = iaddv(&particle.pos, &targetPosition)
+
+    interpolatePos(&particle.pos, &targetPosition, 0)  # skipping current position
+    ipos = interpolatePos(NULL, &targetPosition, 0)
+
+    while ipos != NULL:
+        if not inBounds(board, ipos.y, ipos.x):
+            particle.vel.y = <float>0.0
+            particle.vel.x *= <float>-0.5
+
+            onBreak = True
+            break
+
+        pos = ivec2vec(ipos)
+
+        neighbor = getParticle(board, ipos.y, ipos.x)
+        if waterIsValid(neighbor.pType):
+            nextPos = ipos[0]
+            pushNeighbors(board, WATER, &nextPos)
+
+        else:
+            # if neighbor.state == StateOfAggregation.Liquid:
+            #     if self.density > neighbor.density:
+            #         move = pos
+            #         continue
+            #     elif self.vel.y - neighbor.vel.y > 2:
+            #         move = pos
+            #         self.vel.y = 0
+            #         continue
+
+            if particle.isFalling:
+                velOnHit = max(particle.vel.y * particle.bounciness, <float>4.0)
+                if particle.vel.x:
+                    particle.vel.x = velOnHit if particle.vel.x > 0.0 else -velOnHit
+                else:
+                    direction = <float>-1.0 if random.randint(0, 1) else <float>1.0
+                    particle.vel.x = velOnHit * direction
+
+            additionalPos = normalize(&particle.vel)
+
+            particle.vel.x *= particle.friction * neighbor.friction
+            particle.vel.y = 0.0
+            
+            if -0.1 < additionalPos.y < 0.1:
+                additionalPos.y = 0.0
+            else:
+                additionalPos.y = <float>-1.0 if additionalPos.y < 0.0 else <float>1.0
+            if -0.1 < additionalPos.x < 0.1:
+                additionalPos.x = 0.0
+            else:
+                additionalPos.x = <float>-1.0 if additionalPos.x < 0.0 else <float>1.0
+            iadditionalPos = roundv(&additionalPos)
+
+            goOut = False
+            diagonalNeighborPos = iaddv(&nextPos, &iadditionalPos)
+            newTarget = diagonalNeighborPos
+            newTarget.x += iadditionalPos.x * particle.dispersion
+
+            interpolatePos(&diagonalNeighborPos, &newTarget, 1)  # Skipping 1st iteration
+            newPos = interpolatePos(NULL, &newTarget, 1)
+
+            while newPos != NULL:
+                if inBounds(board, newPos.y, newPos.x):
+                    diagonalNeighbor = getParticle(board, newPos.y, newPos.x)
+                    if waterIsValid(diagonalNeighbor.pType):
+                        particle.isFalling = True
+                        nextPos = newPos[0]
+                    else:
+                        break
+                else:
+                    goOut = True
+                    break
+                
+                newPos = interpolatePos(NULL, &newTarget, 1)
+                
+            if goOut or newPos == NULL:
+                break
+
+            nextNeighborPos = nextPos
+            nextNeighborPos.x += iadditionalPos.x
+            
+            newTarget = nextNeighborPos
+            newTarget.x += iadditionalPos.x * particle.dispersion
+
+            if not equalIVec(&nextNeighborPos, &diagonalNeighborPos):
+                interpolatePos(&nextNeighborPos, &newTarget, 1)
+                newPos = interpolatePos(NULL, &newTarget, 1)
+
+                while newPos != NULL:
+                    if inBounds(board, newPos.y, newPos.x):
+                        nextNeighbor = getParticle(board, newPos.y, newPos.x)
+                        if waterIsValid(nextNeighbor.pType):
+                            particle.isFalling = False
+                            nextPos = newPos
+                        else:
+                            particle.vel.x *= -1
+                            break
+                    else:
+                        break
+    
+                    newPos = interpolatePos(NULL, &newTarget, 1)
+
+                if newPos == NULL:
+                    break
+    
+            particle.isFalling = False
+            break
+        
+        ipos = interpolatePos(NULL, &targetPosition, 0)
+    
+    if not onBreak and inBounds(board, targetPosition.y, targetPosition.x):
+        neighbor = getParticle(board, targetPosition.y, targetPosition.x)
+        if waterIsValid(neighbor.pType):
+            particle.isFalling = True
+
+    if equalIVec(&nextPos, &particle.pos):
+        particle.isFalling = False
+        particle.vel.y = 0
+        particle.vel.x = 0
+        return False
+
+    swapParticles(board, particle, nextPos.y, nextPos.x)
+    return True
 
 cdef bint waterIsValid(ParticleType other):
-    return False
+    if other == WATER:
+        return False
+    if other == SAND or other == WOOD:
+        return False
+    return True
 
 cdef Particle_t Water(int y, int x, bint beenUpdated, bint isFalling):
     cdef Particle_t water
@@ -262,12 +413,12 @@ cdef Particle_t Water(int y, int x, bint beenUpdated, bint isFalling):
     water.lifetime = 0.0
     water.flammable = 100.0
     water.heat = 0.0
-    water.friction = 0.75
-    water.inertialResistance = 0.5
-    water.bounciness = 0.5
-    water.density = 0.0
-    water.dispersion = 0
-    water.mass = 54.0
+    water.friction = 1.0
+    water.inertialResistance = 1.0
+    water.bounciness = 0.75
+    water.density = 10.0
+    water.dispersion = 4
+    water.mass = 30.0
 
     return water
 
@@ -277,7 +428,9 @@ cdef bint woodStep(Particle_t* particle, Board* board):
     return False
 
 cdef bint woodIsValid(ParticleType other):
-    return False
+    if other == WOOD:
+        return False
+    return True
 
 cdef Particle_t Wood(int y, int x, bint beenUpdated, bint isFalling):
     cdef Particle_t wood
@@ -311,7 +464,11 @@ cdef bint fireStep(Particle_t* particle, Board* board):
     return False
 
 cdef bint fireIsValid(ParticleType other):
-    return False
+    if other == FIRE:
+        return False
+    if other == SAND or other == WATER or other == WOOD:
+        return False
+    return True
 
 cdef Particle_t Fire(int y, int x, bint beenUpdated, bint isFalling):
     cdef Particle_t fire
@@ -345,7 +502,11 @@ cdef bint smokeStep(Particle_t* particle, Board* board):
     return False
 
 cdef bint smokeIsValid(ParticleType other):
-    return False
+    if other == SMOKE:
+        return False
+    if other == SAND or other == WATER or other == WOOD:
+        return False
+    return True
 
 cdef Particle_t Smoke(int y, int x, bint beenUpdated, bint isFalling):
     cdef Particle_t smoke

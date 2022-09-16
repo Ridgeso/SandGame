@@ -40,4 +40,4 @@ cdef Brush initBrush()
 cdef void paint(Brush* brush, Board* board, ivec mousePos, ivec lastMousePosition)
 
 
-cdef ivec* interpolatePos(ivec* start, ivec* end)
+cdef ivec* interpolatePos(ivec* start, ivec* end, int depth)

@@ -98,10 +98,10 @@ cdef void paintPoint(Brush* brush, Board* board, ivec* point):
         setParticle(board, point.y, point.x, &newParticle)
 
 cdef void paintFromTo(Brush* brush, Board* board, ivec* start, ivec* end):
-    cdef ivec* point = interpolatePos(start, end)
+    cdef ivec* point = interpolatePos(start, end, 0)
     while point != NULL:
         paintPoint(brush, board, point)
-        point = interpolatePos(NULL, end)
+        point = interpolatePos(NULL, end, 0)
 
 cdef void paint(Brush* brush, Board* board, ivec mousePos, ivec lastMousePosition):
     mousePos.y /= <int>SCALE
@@ -148,18 +148,15 @@ cdef void paint(Brush* brush, Board* board, ivec mousePos, ivec lastMousePositio
 
 
 # Interpolation
-cdef ivec currentCell, cellDirection
-currentCell.y = 0; currentCell.x = 0
-cellDirection.y = 0; cellDirection.x = 0
+cdef ivec[3] currentCell
+cdef ivec[3] cellDirection
 
-cdef vec distances, unitDistance
-distances.y = 0; distances.x = 0
-unitDistance.y = 0; unitDistance.x = 0
+cdef vec[3] distances
+cdef vec[3] unitDistance
 
-cdef ivec* out = <ivec*>malloc(sizeof(ivec))
-out.y = 0; out.x = 0
+cdef ivec[3] out
 
-cdef ivec* interpolatePos(ivec* start, ivec* end):
+cdef ivec* interpolatePos(ivec* start, ivec* end, int depth):
     global currentCell, cellDirection
     global distances, unitDistance
     global out
@@ -170,18 +167,18 @@ cdef ivec* interpolatePos(ivec* start, ivec* end):
     cdef vec dist
 
     if start == NULL:
-        if equalIVec(out, end):
+        if equalIVec(&out[depth], end):
             return NULL
         
-        if distances.y < distances.x:
-            currentCell.y += cellDirection.y
-            distances.y += unitDistance.y
+        if distances[depth].y < distances[depth].x:
+            currentCell[depth].y += cellDirection[depth].y
+            distances[depth].y += unitDistance[depth].y
         else:
-            currentCell.x += cellDirection.x
-            distances.x += unitDistance.x
+            currentCell[depth].x += cellDirection[depth].x
+            distances[depth].x += unitDistance[depth].x
 
-        out[0] = currentCell
-        return out
+        out[depth] = currentCell[depth]
+        return &out[depth]
     
     else:
         dist.y = 1
@@ -192,21 +189,21 @@ cdef ivec* interpolatePos(ivec* start, ivec* end):
         slope = normalize(&slope)
 
         # Moving through cells
-        cellDirection.y = 1 if slope.y > 0. else -1
-        cellDirection.x = 1 if slope.x > 0. else -1
+        cellDirection[depth].y = 1 if slope.y > 0. else -1
+        cellDirection[depth].x = 1 if slope.x > 0. else -1
 
         # Moving through plane
         dy = slope.x/slope.y if slope.y != 0.0 else INFINITY
         dx = slope.y/slope.x if slope.x != 0.0 else INFINITY
 
         dist.x = dy
-        unitDistance.y = length(&dist)  # dx for 1x
+        unitDistance[depth].y = length(&dist)  # dx for 1x
         dist.x = dx
-        unitDistance.x = length(&dist)  # dy for 1y
+        unitDistance[depth].x = length(&dist)  # dy for 1y
 
         # 1st position
-        currentCell = start[0]
-        distances = unitDistance
+        currentCell[depth] = start[0]
+        distances[depth] = unitDistance[depth]
 
-        out[0] = start[0]
-        return out
+        out[depth] = start[0]
+        return &out[depth]

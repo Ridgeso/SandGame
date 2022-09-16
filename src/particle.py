@@ -302,7 +302,7 @@ class Water(Particle):
                             next_neighbor = board[new_pos.y, new_pos.x]
                             if self.is_valid(next_neighbor):
                                 self.is_falling = False
-                                move = next_neighbor_pos
+                                move = new_pos
                             else:
                                 self.vel.x *= -1
                                 break
