@@ -133,7 +133,7 @@ cdef bint sandStep(Particle_t* particle, Board* board):
         
         else:
             if particle.isFalling:
-                velOnHit = max(particle.vel.y * particle.bounciness, <float>3.0)
+                velOnHit = max(particle.vel.y * particle.bounciness, <float>2.0)
                 if particle.vel.x:
                     particle.vel.x = velOnHit if particle.vel.x > 0.0 else -velOnHit
                 else:
@@ -242,6 +242,8 @@ cdef Particle_t Sand(int y, int x, bint beenUpdated, bint isFalling):
 
 ##### Water
 cdef bint waterStep(Particle_t* particle, Board* board):
+    # BUG: few pixels on the edges aren't moving
+
     cdef bint onBreak = False
     cdef bint goOut
 
@@ -264,16 +266,16 @@ cdef bint waterStep(Particle_t* particle, Board* board):
     if particle.isFalling:
         particle.vel.x *= <float>AIR_FRICTION
 
-    targetPosition = roundv(&particle.vel)
-    targetPosition = iaddv(&particle.pos, &targetPosition)
+    cdef ivec ivelocity = roundv(&particle.vel)
+    targetPosition = iaddv(&particle.pos, &ivelocity)
 
     interpolatePos(&particle.pos, &targetPosition, 0)  # skipping current position
     ipos = interpolatePos(NULL, &targetPosition, 0)
 
     while ipos != NULL:
         if not inBounds(board, ipos.y, ipos.x):
-            particle.vel.y = <float>0.0
-            particle.vel.x *= <float>-0.5
+            particle.vel.y = 0
+            particle.vel.x *= -0.5
 
             onBreak = True
             break
@@ -286,21 +288,12 @@ cdef bint waterStep(Particle_t* particle, Board* board):
             pushNeighbors(board, WATER, &nextPos)
 
         else:
-            # if neighbor.state == StateOfAggregation.Liquid:
-            #     if self.density > neighbor.density:
-            #         move = pos
-            #         continue
-            #     elif self.vel.y - neighbor.vel.y > 2:
-            #         move = pos
-            #         self.vel.y = 0
-            #         continue
-
             if particle.isFalling:
-                velOnHit = max(particle.vel.y * particle.bounciness, <float>4.0)
+                velOnHit = max(particle.vel.y * particle.bounciness, 2.0)
                 if particle.vel.x:
                     particle.vel.x = velOnHit if particle.vel.x > 0.0 else -velOnHit
                 else:
-                    direction = <float>-1.0 if random.randint(0, 1) else <float>1.0
+                    direction = -1.0 if random.randint(0, 1) else 1.0
                     particle.vel.x = velOnHit * direction
 
             additionalPos = normalize(&particle.vel)
@@ -311,11 +304,11 @@ cdef bint waterStep(Particle_t* particle, Board* board):
             if -0.1 < additionalPos.y < 0.1:
                 additionalPos.y = 0.0
             else:
-                additionalPos.y = <float>-1.0 if additionalPos.y < 0.0 else <float>1.0
+                additionalPos.y = -1.0 if additionalPos.y < 0.0 else 1.0
             if -0.1 < additionalPos.x < 0.1:
                 additionalPos.x = 0.0
             else:
-                additionalPos.x = <float>-1.0 if additionalPos.x < 0.0 else <float>1.0
+                additionalPos.x = -1.0 if additionalPos.x < 0.0 else 1.0
             iadditionalPos = roundv(&additionalPos)
 
             goOut = False
@@ -358,7 +351,7 @@ cdef bint waterStep(Particle_t* particle, Board* board):
                         nextNeighbor = getParticle(board, newPos.y, newPos.x)
                         if waterIsValid(nextNeighbor.pType):
                             particle.isFalling = False
-                            nextPos = newPos
+                            nextPos = newPos[0]
                         else:
                             particle.vel.x *= -1
                             break
@@ -383,7 +376,7 @@ cdef bint waterStep(Particle_t* particle, Board* board):
     if equalIVec(&nextPos, &particle.pos):
         particle.isFalling = False
         particle.vel.y = 0
-        particle.vel.x = 0
+        # particle.vel.x = 0
         return False
 
     swapParticles(board, particle, nextPos.y, nextPos.x)
@@ -414,10 +407,10 @@ cdef Particle_t Water(int y, int x, bint beenUpdated, bint isFalling):
     water.flammable = 100.0
     water.heat = 0.0
     water.friction = 1.0
-    water.inertialResistance = 1.0
-    water.bounciness = 0.75
+    water.inertialResistance = 0
+    water.bounciness = 0.5
     water.density = 10.0
-    water.dispersion = 4
+    water.dispersion = 3
     water.mass = 30.0
 
     return water
@@ -447,9 +440,9 @@ cdef Particle_t Wood(int y, int x, bint beenUpdated, bint isFalling):
     wood.vel.x = 0.0
     
     wood.lifetime = 0.0
-    wood.flammable = 100.0
+    wood.flammable = 96.0
     wood.heat = 0.0
-    wood.friction = 0.75
+    wood.friction = 0.5
     wood.inertialResistance = 0.5
     wood.bounciness = 0.5
     wood.density = 0.0
@@ -461,7 +454,47 @@ cdef Particle_t Wood(int y, int x, bint beenUpdated, bint isFalling):
 
 ##### Fire
 cdef bint fireStep(Particle_t* particle, Board* board):
-    return False
+    cdef Particle_t toEmpty
+    
+    if particle.heat <= 0:
+        toEmpty = Empty(particle.pos.y, particle.pos.x, False, True)
+        setParticle(board, particle.pos.y, particle.pos.x, &toEmpty)
+        return True
+
+    cdef Particle_t* cell
+    cdef ivec pos
+    cdef int i, j
+    for i in range(-1, 2):
+        for j in range(-1, 2):
+            if i == 0 == j or not inBounds(board, particle.pos.y + i, particle.pos.x + j):
+                continue
+            pos.y = particle.pos.y + i
+            pos.x = particle.pos.x + j
+
+            cell = getParticle(board, pos.y, pos.x)
+            if cell.pType == EMPTY:
+                particle.heat *= 0.99
+            else:
+                if cell.pType == FIRE:
+                    particle.heat = (particle.heat + cell.heat)/2
+                elif cell.pType == WATER:
+                    particle.heat = 0
+
+                if particle.heat > 100:
+                    particle.heat = 100.0
+
+            if cell.pType == EMPTY:
+                if not random.randint(0, 51):
+                    toEmpty = Smoke(pos.y, pos.x, False, True)
+                    setParticle(board, pos.y, pos.x, &toEmpty)
+            elif cell.pType == WOOD:
+                if 100.0 * random.random() > cell.flammable:
+                    toEmpty = Fire(pos.y, pos.x, False, True)
+                    setParticle(board, pos.y, pos.x, &toEmpty)
+
+    # self.color = self.original_color - (abs(self.heat)//100)
+    particle.heat -= 1.0
+    return True
 
 cdef bint fireIsValid(ParticleType other):
     if other == FIRE:
@@ -484,9 +517,9 @@ cdef Particle_t Fire(int y, int x, bint beenUpdated, bint isFalling):
     fire.vel.y = 0.0
     fire.vel.x = 0.0
     
-    fire.lifetime = 0.0
+    fire.lifetime = 1.0
     fire.flammable = 100.0
-    fire.heat = 0.0
+    fire.heat = 100.0
     fire.friction = 0.75
     fire.inertialResistance = 0.5
     fire.bounciness = 0.5

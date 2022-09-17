@@ -214,10 +214,11 @@ class Water(Particle):
 
         self.vel = glm.vec2()
 
+        self.inertial_resistance = 0.0
         self.bounciness = 0.75
-        self.density = 10.
+        self.density = 10.0
         self.dispersion = 4
-        self.mass = 30.
+        self.mass = 30.0
 
     def _step(self, board: tools.Board) -> bool:
         move = glm.ivec2(self.pos)
@@ -376,7 +377,7 @@ class Fire(Particle):
 
         for i in range(-1, 2):
             for j in range(-1, 2):
-                if (i == 0 and j == 0) or not board.in_bounds(self.pos.y + i, self.pos.x + j):
+                if i == 0 == j or not board.in_bounds(self.pos.y + i, self.pos.x + j):
                     continue
 
                 cell = board[self.pos.y + i, self.pos.x + j]
