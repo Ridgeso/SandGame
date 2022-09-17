@@ -532,7 +532,38 @@ cdef Particle_t Fire(int y, int x, bint beenUpdated, bint isFalling):
 
 ##### Smoke
 cdef bint smokeStep(Particle_t* particle, Board* board):
-    return False
+    cdef Particle_t toEmpty
+
+    if particle.lifetime < 0:
+        toEmpty = Empty(particle.pos.y, particle.pos.x, False, True)
+        setParticle(board, particle.pos.y, particle.pos.x, &toEmpty)
+        return False
+    particle.lifetime -= 1
+
+    cdef ivec nextPos = particle.pos
+    cdef Particle_t* cell
+
+    if inBounds(board, nextPos.y - 1, nextPos.x):
+        cell = getParticle(board, nextPos.y - 1, nextPos.x)
+        if smokeIsValid(cell.pType):
+            nextPos.y -= 1
+
+    cdef int direction = random.randint(-1, 1)
+    if not direction:
+        swapParticles(board, particle, nextPos.y, nextPos.x)
+        return True
+
+    if inBounds(board, nextPos.y, nextPos.x - direction):
+        cell = getParticle(board, nextPos.y, nextPos.x - direction)
+        if smokeIsValid(cell.pType):    
+            nextPos.x -= direction
+    elif inBounds(board, nextPos.y, nextPos.x + direction):
+        cell = getParticle(board, nextPos.y, nextPos.x + direction)
+        if smokeIsValid(cell.pType):
+            nextPos.x += direction
+
+    swapParticles(board, particle, nextPos.y, nextPos.x)
+    return True
 
 cdef bint smokeIsValid(ParticleType other):
     if other == SMOKE:
@@ -555,15 +586,15 @@ cdef Particle_t Smoke(int y, int x, bint beenUpdated, bint isFalling):
     smoke.vel.y = 0.0
     smoke.vel.x = 0.0
     
-    smoke.lifetime = 0.0
+    smoke.lifetime = 10.0 + random.random() * 70.0
     smoke.flammable = 100.0
     smoke.heat = 0.0
-    smoke.friction = 0.75
-    smoke.inertialResistance = 0.5
-    smoke.bounciness = 0.5
+    smoke.friction = 1.0
+    smoke.inertialResistance = 1.0
+    smoke.bounciness = 0.0
     smoke.density = 0.0
     smoke.dispersion = 0
-    smoke.mass = 54.0
+    smoke.mass = 12.0
 
     return smoke
 
