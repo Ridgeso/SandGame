@@ -1,5 +1,6 @@
 from setuptools import setup, find_packages, Extension
 from Cython.Build import cythonize
+import numpy
 
 
 app = [
@@ -21,6 +22,7 @@ setup(
     name="SandGameInCython",
     packages=find_packages(),
     ext_modules=cythonize(app),
+    include_dirs=[numpy.get_include()],
     options={
         "build": {
             "build_lib": "."

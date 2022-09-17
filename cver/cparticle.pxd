@@ -32,7 +32,7 @@ cdef struct Particle_t:
     float mass
 
 cdef bint onUpdate(Particle_t* particle, Board* board)
-cdef void resetParticle(Particle_t* particle)
+cdef void resetParticle(Particle_t* particle) nogil
 cdef bint isValid(ParticleType particle, ParticleType spot)
 
 cdef Particle_t Sand(int y, int x, bint beenUpdated, bint isFalling)

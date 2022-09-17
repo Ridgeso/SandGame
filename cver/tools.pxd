@@ -25,10 +25,10 @@ cdef void swapParticles(Board* board, Particle_t* cell, int y, int x)
 cdef inline bint inBounds(Board* board, int y, int x):
     return 0 <= y < board.height and 0 <= x < board.width
 
-cdef inline Particle_t* getParticle(Board* board, int y, int x):
+cdef inline Particle_t* getParticle(Board* board, int y, int x) nogil:
     return &board.board[y][x]
 
-cdef inline void setParticle(Board* board, int y, int x, Particle_t* particle):
+cdef inline void setParticle(Board* board, int y, int x, Particle_t* particle) with gil:
     board.board[y][x] = particle[0]
 
 

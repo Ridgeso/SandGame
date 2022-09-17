@@ -69,7 +69,7 @@ cdef bint onUpdate(Particle_t* particle, Board* board):
 
     return hasBeenModified
 
-cdef void resetParticle(Particle_t* particle):
+cdef void resetParticle(Particle_t* particle) nogil:
     particle.beenUpdated = False
 
 cdef bint isValid(ParticleType particle, ParticleType spot):

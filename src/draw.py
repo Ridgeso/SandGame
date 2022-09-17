@@ -19,6 +19,7 @@ class Display:
         self.win = py.display.set_mode((self.win_x, self.win_y))
         # Simulation Texture
         self.surface = py.Surface((BOARD_X, BOARD_Y))
+        self.surface_array = np.zeros((BOARD_X, BOARD_Y), dtype=np.uint32)
 
         # Board
         self.board = tools.Board(BOARD_Y, BOARD_X)
@@ -123,23 +124,38 @@ class Display:
                         chunk_pos = glm.ivec2(cell.pos.x // self.chunk_size, cell.pos.y // self.chunk_size)
                         self.activate_chunks_around(chunk_pos.y, chunk_pos.x)
 
-    # @Timeit(log="UPDATING", max_time=True, min_time=True)
+    @tools.Timeit(log="UPDATING", max_time=True, min_time=True, avg_time=True)
     def update(self) -> None:
         for chunk_row in reversed(self.chunks):
             for chunk in chunk_row:
                 if chunk.is_active():
                     self.on_update_chunk(chunk)
 
-    # @Timeit(log="DRAWING", max_time=True, min_time=True)
+    def on_redrwa_chunk(self, chunk):
+        for i in range(chunk.height):
+            for j in range(chunk.width):
+                cell = self.board[chunk.x + i, chunk.y + j]
+                if cell is not None:
+                    self.surface_array[chunk.y + j, chunk.x + i] = cell.color
+                    cell.reset()
+                else:
+                    self.surface_array[chunk.y + j, chunk.x + i] = 0x00_00_00
+
+    @tools.Timeit(log="DRAWING", max_time=True, min_time=True, avg_time=True)
     def redraw(self) -> None:
+        # for chunks_row in self.chunks:
+        #     for chunk in chunks_row:
+        #         # if chunk.is_active():
+        #         self.on_redrwa_chunk(chunk)
         for i, level in enumerate(self.board):
             for j, cell in enumerate(level):
                 if cell is not None:
-                    self.surface.set_at((j, i), cell.color)
+                    self.surface_array[j, i] = cell.color
                     cell.reset()
                 else:
-                    self.surface.set_at((j, i), 0x00_00_00)
+                    self.surface_array[j, i] = 0x00_00_00
 
+        py.surfarray.blit_array(self.surface, self.surface_array)
         surf = py.transform.scale(self.surface, (WX, WY))
         self.win.blit(surf, (0, 0))
 

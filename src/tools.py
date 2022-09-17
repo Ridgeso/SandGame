@@ -217,17 +217,21 @@ def interpolate_pos_dda(start: Union[glm.vec2, glm.ivec2], end: Union[glm.vec2, 
 
 # Debug
 class Timeit:
-    def __init__(self, log: str = "", max_time: bool = False, min_time: bool = False) -> None:
-        self.log = f"[{log}] | AT"
+    def __init__(self, log: str = "", max_time: bool = False, min_time: bool = False, avg_time: bool = False) -> None:
+        self.log = f"[{log:<15}] | AT"
 
         self.max_time = max_time
         self.min_time = min_time
+        self.avg_time = avg_time
+        
+        self.avg_counter = 0.0
 
-        self.max_time_spend = 0
-        self.min_time_spend = 1_000_000
+        self.max_time_spent = 0
+        self.min_time_spent = 1_000_000
+        self.avg_time_spent = 0.0
 
     def __call__(self, f: Callable[[Any, ...], Any]) -> Callable[[Any, ...], Any]:
-        self.log += f"[{f.__name__}]" + " | {:7.03f} ms"
+        self.log += f"[{f.__name__:<15}]" + " | {:7.03f} ms"
 
         @wraps(f)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
@@ -240,11 +244,16 @@ class Timeit:
             # Logging
             log = self.log.format(end)
             if self.max_time:
-                self.max_time_spend = max(end, self.max_time_spend)
-                log += f" | Max {self.max_time_spend: 7.03f}"
+                self.max_time_spent = max(end, self.max_time_spent)
+                log += f" | Max {self.max_time_spent: 7.03f}"
             if self.min_time:
-                self.min_time_spend = min(end, self.min_time_spend)
-                log += f" | Min {self.min_time_spend: 7.03f}"
+                self.min_time_spent = min(end, self.min_time_spent)
+                log += f" | Min {self.min_time_spent: 7.03f}"
+            if self.avg_time:
+                self.avg_counter += 1.0
+                self.avg_time_spent += end
+                avg = self.avg_time_spent / self.avg_counter
+                log += f" | Avg {avg: 7.03f}"
             print(log)
 
             return result

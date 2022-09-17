@@ -1,6 +1,11 @@
 from values import *
 import pygame as py
+from time import perf_counter
 
+import numpy as np
+cimport numpy as np
+np.import_array()
+from cython.parallel import parallel, prange
 from libc.stdio cimport printf
 from libc.stdlib cimport malloc, free
 
@@ -20,7 +25,9 @@ cdef class Display:
 
     cdef win
     cdef surface
-
+    cdef np.ndarray surfaceArray
+    cdef int[:,:] surfaceArrayView
+    
     cdef Board board
     cdef Brush brush
     cdef ivec lastMousePosition
@@ -37,6 +44,8 @@ cdef class Display:
         self.win = py.display.set_mode((self.winX, self.winY))
         # Simulation Texture
         self.surface = py.Surface((BOARD_X, BOARD_Y))
+        self.surfaceArray = np.zeros((BOARD_X, BOARD_Y), dtype=int)
+        self.surfaceArrayView = self.surfaceArray
 
         # Board
         self.board = initBoard(BOARD_Y, BOARD_X)
@@ -181,6 +190,7 @@ cdef class Display:
                             cell.pos.x / self.chunkSize  # column
                         )
 
+    # @Timeit(log="UPDATING", max_time=True, min_time=True, avg_time=True)
     cpdef void update(self):
         cdef Chunk* chunk
         cdef int row, column
@@ -189,33 +199,36 @@ cdef class Display:
                 chunk = &self.chunks[row][column]
                 if chunk.updateThisFrame:
                     self.onUpdateChunk(chunk)
-    
-    cpdef void redraw(self):
+
+    cdef void onRedrawBoard(self) nogil:
         cdef Particle_t* cell
         cdef int i, j
-        for i in range(self.board.height):
-            for j in range(self.board.width):
-                cell = getParticle(&self.board, i, j)
+        with nogil, parallel():
+            for i in prange(self.board.height):
+                for j in prange(self.board.width):
+                    cell = getParticle(&self.board, i, j)
+                    self.surfaceArrayView[j][i] = cell.color
+                    resetParticle(cell)
+
+    # @Timeit(log="DRAWING", max_time=True, min_time=True, avg_time=True)
+    cpdef void redraw(self):
+        self.onRedrawBoard()
                 
-                self.surface.set_at((j, i), cell.color)
-                resetParticle(cell)
-                
-        surf = py.transform.scale(self.surface, (WX, WY))
+        py.surfarray.blit_array(self.surface, self.surfaceArray)
+        cdef surf = py.transform.scale(self.surface, (WX, WY))
         self.win.blit(surf, (0, 0))
         
-        cdef int[2][2] chunkRect
-        cdef Chunk* chunk
-        cdef int color
-        if DEBUG:
-            for i in range(self.chunkRows):
-                for j in range(self.chunkColumns):
-                    chunk = &self.chunks[i][j]
-                    
-                    chunkRect = [[chunk.x * <int>SCALE,     chunk.y * <int>SCALE],
-                                 [chunk.width * <int>SCALE, chunk.height * <int>SCALE]]
-                                
-                    color = 0x00FF00 if chunk.updateThisFrame else 0xFF0000
-                    py.draw.rect(self.win, color, chunkRect, 1)
+        # cdef int[2][2] chunkRect
+        # cdef int color
+        # for i in range(self.chunkRows):
+        #     for j in range(self.chunkColumns):
+        #         chunk = &self.chunks[i][j]
+                
+        #         chunkRect = [[chunk.x * <int>SCALE,     chunk.y * <int>SCALE],
+        #                         [chunk.width * <int>SCALE, chunk.height * <int>SCALE]]
+                            
+        #         color = 0x00FF00 if chunk.updateThisFrame else 0xFF0000
+        #         py.draw.rect(self.win, color, chunkRect, 1)
 
     cpdef void reset_chunks(self):
         cdef int row, column
@@ -225,3 +238,54 @@ cdef class Display:
     
     cdef void map_colors(self):
         pass
+
+
+
+
+cdef class Timeit:
+    cdef log
+    cdef bint max_time, min_time, avg_time
+
+    cdef double max_time_spent, min_time_spent
+    cdef double avg_counter, avg_time_spent
+
+    def __cinit__(self, log, bint max_time = False, bint min_time = False, bint avg_time= False):
+        self.log = f"[{log}] | AT"
+
+        self.max_time = max_time
+        self.min_time = min_time
+        self.avg_time = avg_time
+        
+        self.avg_counter = 0.0
+
+        self.max_time_spent = 0
+        self.min_time_spent = 1_000_000
+        self.avg_time_spent = 0.0
+
+    def __call__(self, f):
+        self.log += f"[{f.__name__}]" + " | {:7.03f} ms"
+
+        def wrapper(*args, **kwargs):
+            # Function
+            start = perf_counter()
+            result = f(*args, **kwargs)
+            end = perf_counter()
+            end = 1000 * (end - start)
+
+            # Logging
+            log = self.log.format(end)
+            if self.max_time:
+                self.max_time_spent = max(end, self.max_time_spent)
+                log += f" | Max {self.max_time_spent: 7.03f}"
+            if self.min_time:
+                self.min_time_spent = min(end, self.min_time_spent)
+                log += f" | Min {self.min_time_spent: 7.03f}"
+            if self.avg_time:
+                self.avg_counter += 1.0
+                self.avg_time_spent += end
+                avg = self.avg_time_spent / self.avg_counter
+                log += f" | Avg {avg: 7.03f}"
+            print(log)
+
+            return result
+        return wrapper
