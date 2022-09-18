@@ -93,20 +93,66 @@ cdef class Display:
         free(<void*>self.chunks)
 
     cdef void _activateChunkOnDraw(self, ivec mousePos):
-        cdef ivec startChunkPos, endChunkPos
+        cdef Chunk* chunk
+        cdef ivec brushPos = mousePos
+        brushPos.y /= SCALE
+        brushPos.x /= SCALE
+        cdef ivec lastBrushPos = self.lastMousePosition
+        lastBrushPos.y /= SCALE
+        lastBrushPos.x /= SCALE
 
-        startChunkPos.y = self.lastMousePosition.y / self.chunkThreshold
-        startChunkPos.x = self.lastMousePosition.x / self.chunkThreshold
+        cdef ivec inear, ilastNear
+        cdef vec near, lastNear
+        cdef float distance, penSize = <float>self.brush.penSize
 
-        endChunkPos.y = mousePos.y / self.chunkThreshold
-        endChunkPos.x = mousePos.x / self.chunkThreshold
-        
-        cdef ivec* chunkPos = interpolatePos(&startChunkPos, &endChunkPos, 0)
-        while chunkPos != NULL:
-            self.activateChunksAround(chunkPos.y, chunkPos.x)
-            chunkPos = interpolatePos(NULL, &endChunkPos, 0)
-        
-        self.lastMousePosition = mousePos
+        cdef vec leftTop, rightTop, rightBottom, leftBottom 
+
+        cdef vec mousePosChunk = ivec2vec(&mousePos)
+        mousePosChunk.y /= SCALE
+        mousePosChunk.x /= SCALE
+        cdef vec lastMousePosChunk = ivec2vec(&self.lastMousePosition)
+        lastMousePosChunk.y /= SCALE
+        lastMousePosChunk.x /= SCALE
+            
+        cdef int i, j
+        for i in range(self.chunkRows):
+                for j in range(self.chunkColumns):
+                    chunk = &self.chunks[i][j]
+
+                    # Calculating relative position between Chunk and Brush (on the left or right side, above or below)
+                    inear.y = max(chunk.y, min(chunk.y + chunk.height, brushPos.y))
+                    inear.x = max(chunk.x, min(chunk.x + chunk.width,  brushPos.x))
+                    ilastNear.y = max(chunk.y, min(chunk.y + chunk.height, lastBrushPos.y))
+                    ilastNear.x = max(chunk.x, min(chunk.x + chunk.width,  lastBrushPos.x))
+                    # Nearest point downsize to the origin
+                    inear = isubv(&inear, &brushPos)
+                    ilastNear = isubv(&ilastNear, &lastBrushPos)
+
+                    near = ivec2vec(&inear)
+                    lastNear = ivec2vec(&ilastNear)
+                    # if distance is lower than brush radius we have an intersection
+                    distance = length(&near)
+                    if distance <= penSize:
+                        activateChunk(chunk)
+                        continue
+                    distance = length(&lastNear)
+                    if distance <= penSize:
+                        activateChunk(chunk)
+                    continue
+
+                    leftTop = vec(<float>chunk.y, <float>chunk.x)
+                    rightTop = vec(<float>chunk.y, <float>(chunk.x + chunk.width))
+                    rightBottom = vec(<float>(chunk.y + chunk.height), <float>(chunk.x + chunk.width))
+                    leftBottom = vec(<float>(chunk.y + chunk.height), <float>chunk.x)
+
+                    if linePointLen(mousePosChunk, lastMousePosChunk, leftTop) < penSize:
+                        activateChunk(chunk)
+                    elif linePointLen(mousePosChunk, lastMousePosChunk, rightTop) < penSize:
+                        activateChunk(chunk)
+                    elif linePointLen(mousePosChunk, lastMousePosChunk, rightBottom) < penSize:
+                        activateChunk(chunk)
+                    elif linePointLen(mousePosChunk, lastMousePosChunk, leftBottom) < penSize:
+                        activateChunk(chunk)
 
     cpdef void paint_particles(self):
         cdef ivec mousePos
@@ -174,6 +220,15 @@ cdef class Display:
             activateChunk(&self.chunks[row][column - 1])
         if 0 <= column + 1 < self.chunkColumns:
             activateChunk(&self.chunks[row][column + 1])
+
+        if 0 <= row - 1 < self.chunkRows and 0 <= column - 1 < self.chunkColumns:
+            activateChunk(&self.chunks[row - 1][column - 1])
+        if 0 <= row - 1 < self.chunkRows and 0 <= column + 1 < self.chunkColumns:
+            activateChunk(&self.chunks[row - 1][column + 1])
+        if 0 <= row + 1 < self.chunkRows and 0 <= column - 1 < self.chunkColumns:
+            activateChunk(&self.chunks[row + 1][column - 1])
+        if 0 <= row + 1 < self.chunkRows and 0 <= column + 1 < self.chunkColumns:
+            activateChunk(&self.chunks[row + 1][column + 1])
     
     cdef void onUpdateChunk(self, Chunk* chunk):
         cdef bint haveMoved
@@ -218,17 +273,18 @@ cdef class Display:
         cdef surf = py.transform.scale(self.surface, (WX, WY))
         self.win.blit(surf, (0, 0))
         
-        # cdef int[2][2] chunkRect
-        # cdef int color
-        # for i in range(self.chunkRows):
-        #     for j in range(self.chunkColumns):
-        #         chunk = &self.chunks[i][j]
+        cdef int[2][2] chunkRect
+        cdef Chunk* chunk
+        cdef int color
+        for i in range(self.chunkRows):
+            for j in range(self.chunkColumns):
+                chunk = &self.chunks[i][j]
                 
-        #         chunkRect = [[chunk.x * <int>SCALE,     chunk.y * <int>SCALE],
-        #                         [chunk.width * <int>SCALE, chunk.height * <int>SCALE]]
+                chunkRect = [[chunk.x * <int>SCALE,     chunk.y * <int>SCALE],
+                                [chunk.width * <int>SCALE, chunk.height * <int>SCALE]]
                             
-        #         color = 0x00FF00 if chunk.updateThisFrame else 0xFF0000
-        #         py.draw.rect(self.win, color, chunkRect, 1)
+                color = 0x00FF00 if chunk.updateThisFrame else 0xFF0000
+                py.draw.rect(self.win, color, chunkRect, 1)
 
     cpdef void reset_chunks(self):
         cdef int row, column

@@ -135,31 +135,7 @@ class Brush:
                 self.paint_point(board, last_point)
 
         self.last_mouse_on_board_position = pos
-
-    # TODO: Deal with circular import
-    # def erase(self, board: Board, pos: glm.ivec2) -> None:
-    #     pen = self.pen
-    #     self.pen = Eraser
-    #     self.paint(board, pos)
-    #     self.pen = pen
-
-
-def chunk_intersect_with_brush(chunk: Chunk, brush: Brush, brush_pos: glm.ivec2) -> bool:
-    brush_pos = glm.ivec2(brush_pos)
-    brush_pos //= SCALE
-
-    # Calculating relative position between Chunk and Brush (on the left or right side, above or below)
-    near = glm.ivec2(max(chunk.x, min(chunk.x + chunk.width, brush_pos.x)),
-                     max(chunk.y, min(chunk.y + chunk.height, brush_pos.y)))
-    # Nearest point downsize to the origin
-    near -= brush_pos
-    # if distance is lower than brush radius we have an intersection
-    distance = glm.length(near)
-    if distance <= brush.pen_size**2:
-        return True
-
-    return False
-
+        
 
 def interpolate_pos(start: Union[glm.vec2, glm.ivec2], end: Union[glm.vec2, glm.ivec2],
                     slope: Optional[glm.vec2] = None) -> Iterator[glm.ivec2]:

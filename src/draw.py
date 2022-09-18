@@ -56,16 +56,70 @@ class Display:
         mouse_button_pressed = py.mouse.get_pressed(num_buttons=3)
         keys_pressed = py.key.get_pressed()
 
-        def activate_chunk_on_draw() -> None:
-            if self.last_mouse_position is None:
-                self.last_mouse_position = mouse_pos
-            start_chunk_pos = glm.ivec2(self.last_mouse_position.x // self.chunk_threshold,
-                                        self.last_mouse_position.y // self.chunk_threshold)
-            end_chunk_pos = glm.ivec2(mouse_pos.x // self.chunk_threshold, mouse_pos.y // self.chunk_threshold)
-            for chunk_pos in tools.interpolate_pos(start_chunk_pos, end_chunk_pos):
-                self.activate_chunks_around(chunk_pos.y, chunk_pos.x)
+        if self.last_mouse_position is None:
             self.last_mouse_position = mouse_pos
 
+        def activate_chunk_on_draw() -> None:                
+            chunk_array = glm.array(glm.vec2(mouse_pos.y, mouse_pos.x),
+                                    glm.vec2(self.last_mouse_position.y, self.last_mouse_position.x))
+            chunk_array /= SCALE
+
+            mouse_pos_chunk = glm.vec2(mouse_pos) / SCALE
+            last_mouse_pos_chunk = glm.vec2(self.last_mouse_position) / SCALE
+            def line_point_len(point: glm.vec2) -> bool:
+                if mouse_pos_chunk == last_mouse_pos_chunk:
+                    return False
+                slope = last_mouse_pos_chunk - mouse_pos_chunk
+                divisor = pow(slope.x, 2) + pow(slope.y, 2)
+                
+                t = ((point.x - mouse_pos_chunk.x) * slope.x + (point.y - mouse_pos_chunk.y) * slope.y) / divisor
+                if not 0 <= t <= 1:  # Checking if p's projection lies on the line
+                    return False
+                    
+                point_distance_from_line = abs(slope.x * (mouse_pos_chunk.y - point.y) - (mouse_pos_chunk.x - point.x) * slope.y)
+                point_distance_from_line /= pow(divisor, 0.5)
+                touched_by_brush = self.brush.pen_size >  point_distance_from_line
+                return touched_by_brush
+
+            for chunk_row in self.chunks:
+                for chunk in chunk_row:
+                    # Operations on glm.array
+                    # Calculating relative position between Chunk and Brush (on the left or right side, above or below)
+                    near = chunk_array.map(lambda brush_pos: glm.vec2(
+                        max(chunk.x, min(chunk.x + chunk.width,  brush_pos.x)),
+                        max(chunk.y, min(chunk.y + chunk.height, brush_pos.y))
+                    ))
+                    # Nearest point downsize to the origin
+                    near -= chunk_array
+                    # if distance is lower than brush radius we have an intersection
+                    distance = near.map(glm.length)
+                    if True in distance.map(lambda x: x < self.brush.pen_size):
+                        chunk.activate()
+                        continue
+                    
+                    # If fails check distance beetween slope and point
+                    left_top = glm.vec2(chunk.y, chunk.x)
+                    right_top = glm.vec2(chunk.y, chunk.x + chunk.width)
+                    right_bottom = glm.vec2(chunk.y + chunk.height, chunk.x + chunk.width)
+                    left_bottom = glm.vec2(chunk.y + chunk.height, chunk.x)
+
+                    # len_left_top = line_point_len(left_top)
+                    # len_right_top = line_point_len(right_top)
+                    # len_right_bottom = line_point_len(right_bottom)
+                    # len_left_bottom = line_point_len(left_bottom)
+
+                    # if len_left_top or len_right_top or len_right_bottom or len_left_bottom:
+                    #     chunk.activate()
+
+                    if line_point_len(left_top):
+                        chunk.activate()
+                    elif line_point_len(right_top):
+                        chunk.activate()
+                    elif line_point_len(right_bottom):
+                        chunk.activate()
+                    elif line_point_len(left_bottom):
+                        chunk.activate()
+                    
         if mouse_button_pressed[self.MouseKey.Left]:
             # Draw Particles
             self.brush.paint(self.board, mouse_pos)
@@ -73,6 +127,9 @@ class Display:
             # self.brush.paint_point(self.board, pos)
             # Activate chunks
             activate_chunk_on_draw()
+
+            self.last_mouse_position = mouse_pos
+
         elif mouse_button_pressed[self.MouseKey.Right]:
             # Erase Particles
             temp_pen = self.brush.pen
@@ -81,6 +138,9 @@ class Display:
             self.brush.pen = temp_pen
             # Activate chunks
             activate_chunk_on_draw()
+
+            self.last_mouse_position = mouse_pos
+
         else:
             self.brush.last_mouse_on_board_position = None
             self.last_mouse_position = None
@@ -114,6 +174,15 @@ class Display:
         if 0 <= y + 1 < self.chunks.shape[1]:
             self.chunks[x, y + 1].activate()
 
+        if 0 <= x - 1 < self.chunks.shape[0] and 0 <= y - 1 < self.chunks.shape[1]:
+            self.chunks[x - 1, y - 1].activate()
+        if 0 <= x - 1 < self.chunks.shape[0] and 0 <= y + 1 < self.chunks.shape[1]:
+            self.chunks[x - 1, y + 1].activate()
+        if 0 <= x + 1 < self.chunks.shape[0] and 0 <= y - 1 < self.chunks.shape[1]:
+            self.chunks[x + 1, y - 1].activate()
+        if 0 <= x + 1 < self.chunks.shape[0] and 0 <= y + 1 < self.chunks.shape[1]:
+            self.chunks[x + 1, y + 1].activate()
+
     def on_update_chunk(self, chunk: tools.Chunk) -> None:
         for i in reversed(range(chunk.width)):
             for j in range(chunk.height):
@@ -124,7 +193,7 @@ class Display:
                         chunk_pos = glm.ivec2(cell.pos.x // self.chunk_size, cell.pos.y // self.chunk_size)
                         self.activate_chunks_around(chunk_pos.y, chunk_pos.x)
 
-    @tools.Timeit(log="UPDATING", max_time=True, min_time=True, avg_time=True)
+    # @tools.Timeit(log="UPDATING", max_time=True, min_time=True, avg_time=True)
     def update(self) -> None:
         for chunk_row in reversed(self.chunks):
             for chunk in chunk_row:
@@ -141,7 +210,7 @@ class Display:
                 else:
                     self.surface_array[chunk.y + j, chunk.x + i] = 0x00_00_00
 
-    @tools.Timeit(log="DRAWING", max_time=True, min_time=True, avg_time=True)
+    # @tools.Timeit(log="DRAWING", max_time=True, min_time=True, avg_time=True)
     def redraw(self) -> None:
         # for chunks_row in self.chunks:
         #     for chunk in chunks_row:

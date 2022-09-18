@@ -39,5 +39,6 @@ cdef struct Brush:
 cdef Brush initBrush()
 cdef void paint(Brush* brush, Board* board, ivec mousePos, ivec lastMousePosition)
 
+cdef float linePointLen(vec lineStart, vec lineEnd, vec point)
 
 cdef ivec* interpolatePos(ivec* start, ivec* end, int depth)

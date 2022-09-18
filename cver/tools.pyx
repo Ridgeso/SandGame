@@ -9,7 +9,7 @@ from cparticle cimport *
 cdef extern from "math.h":
     const float INFINITY
     double sqrt(double)
-    double round(double y)
+    double round(double)
 
 
 #### CHUNK
@@ -145,6 +145,22 @@ cdef void paint(Brush* brush, Board* board, ivec mousePos, ivec lastMousePositio
 
             lastPoint = iaddv(&lastMousePosition, &r_phi)
             paintPoint(brush, board, &lastMousePosition)
+
+
+cdef float linePointLen(vec lineStart, vec lineEnd, vec point):
+    if equalVec(&lineStart, &lineEnd):
+        return INFINITY
+    cdef vec slope = subv(&lineEnd, &lineStart)
+    cdef float divisor = pow(slope.x, 2) + pow(slope.y, 2)
+
+    cdef float t = ((point.x - lineStart.x) * slope.x + (point.y - lineStart.y) * slope.y) / divisor
+    if not 0.0 <= t <= 1.0:  # Checking if p's projection lies on the line
+        return INFINITY
+
+    cdef float point_distance_from_line = abs(slope.x * (lineStart.y - point.y) - (lineStart.x - point.x) * slope.y)
+    point_distance_from_line /= sqrt(divisor)
+
+    return point_distance_from_line
 
 
 # Interpolation

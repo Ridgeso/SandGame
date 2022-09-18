@@ -5,7 +5,7 @@ import numpy
 
 app = [
     Extension(
-        "cver.cdraw", ['./cver/cdraw.pyx'],
+        "cver.cdraw", ['./cver/cdraw.pyx', './cver/vector.c'],
         include_dirs=["./cver"],
         library_dirs=["./cver"]),
     Extension(
