@@ -7,15 +7,21 @@ app = [
     Extension(
         "cver.cdraw", ['./cver/cdraw.pyx', './cver/vector.c'],
         include_dirs=["./cver"],
-        library_dirs=["./cver"]),
+        library_dirs=["./cver"],
+        extra_compile_args=['-fopenmp'],
+        extra_link_args=['-fopenmp']),
     Extension(
         "cver.cparticle", ['./cver/cparticle.pyx', './cver/vector.c'],
         include_dirs=["./cver"],
-        library_dirs=["./cver"]),
+        library_dirs=["./cver"],
+        extra_compile_args=['-fopenmp'],
+        extra_link_args=['-fopenmp']),
     Extension(
         "cver.tools", ['./cver/tools.pyx', './cver/vector.c'],
         include_dirs=["./cver"],
-        library_dirs=["./cver"])
+        library_dirs=["./cver"],
+        extra_compile_args=['-fopenmp'],
+        extra_link_args=['-fopenmp'])
 ]
 
 setup(

@@ -6,6 +6,7 @@ import numpy as np
 cimport numpy as np
 np.import_array()
 from cython.parallel import parallel, prange
+from cython cimport boundscheck
 from libc.stdio cimport printf
 from libc.stdlib cimport malloc, free
 
@@ -34,7 +35,7 @@ cdef class Display:
 
     cdef int chunkSize, chunkRows, chunkColumns
     cdef Chunk** chunks
-    cdef int chunkThreshold
+    cdef int chunkThreshold, chunksSeperator
 
     def __cinit__(self, int y, int x):
         self.winX = y
@@ -83,6 +84,7 @@ cdef class Display:
                 )
             
         self.chunkThreshold = <int>SCALE * self.chunkSize
+        self.chunksSeperator = self.chunkColumns / 4
 
     def __dealloc__(self):
         freeBoard(&self.board)
@@ -132,13 +134,13 @@ cdef class Display:
                     lastNear = ivec2vec(&ilastNear)
                     # if distance is lower than brush radius we have an intersection
                     distance = length(&near)
-                    if distance <= penSize:
+                    if distance <= penSize:  # Chunks around mouse position
                         activateChunk(chunk)
                         continue
                     distance = length(&lastNear)
-                    if distance <= penSize:
+                    if distance <= penSize:  # Chunks around mouse previous position
                         activateChunk(chunk)
-                    continue
+                        continue
 
                     leftTop = vec(<float>chunk.y, <float>chunk.x)
                     rightTop = vec(<float>chunk.y, <float>(chunk.x + chunk.width))
@@ -163,7 +165,9 @@ cdef class Display:
         mousePos.x = mp[0]
 
         if self.lastMousePosition.y == -1 and self.lastMousePosition.x == -1:
+            # print("NADANE")
             self.lastMousePosition = mousePos
+        # print("STOP")
 
         mouseButtonPressed = py.mouse.get_pressed(num_buttons=3)
         keysPressed = py.key.get_pressed()
@@ -209,7 +213,7 @@ cdef class Display:
     cpdef void draw_cursor(self):
         py.draw.circle(self.win, (66, 66, 66), py.mouse.get_pos(), SCALE * self.brush.penSize, 2)
 
-    cdef void activateChunksAround(self, int row, int column):
+    cdef void activateChunksAround(self, int row, int column) nogil:
         activateChunk(&self.chunks[row][column])
 
         if 0 <= row - 1 < self.chunkRows:
@@ -230,37 +234,69 @@ cdef class Display:
         if 0 <= row + 1 < self.chunkRows and 0 <= column + 1 < self.chunkColumns:
             activateChunk(&self.chunks[row + 1][column + 1])
     
-    cdef void onUpdateChunk(self, Chunk* chunk):
+    cdef void onUpdateChunk(self, Chunk* chunk) nogil:
         cdef bint haveMoved
         cdef Particle_t* cell
         cdef int i, j
-        for i in reversed(range(chunk.height)):
-            for j in range(chunk.width):
-                cell = getParticle(&self.board, chunk.y + i, chunk.x + j)
-                if cell.pType != EMPTY:
-                    haveMoved = onUpdate(cell, &self.board)
-                    if haveMoved:
-                        self.activateChunksAround(
-                            cell.pos.y / self.chunkSize, # row
-                            cell.pos.x / self.chunkSize  # column
-                        )
+        with gil:
+            for i in reversed(range(chunk.height)):
+                for j in range(chunk.width):
+                    cell = getParticle(&self.board, chunk.y + i, chunk.x + j)
+                    if cell.pType != EMPTY:
+                        haveMoved = onUpdate(cell, &self.board)
+                        # if haveMoved:
+                        #     self.activateChunksAround(
+                        #         cell.pos.y / self.chunkSize, # row
+                        #         cell.pos.x / self.chunkSize  # column
+                        #     )
+        activateChunk(chunk)
+
+    # cdef void onUpdateSegment(self, int chunkColumnBeginning, int chunkColumnEnd):
+    cdef void onUpdateSegment(self):
+        cdef Chunk* chunk
+        cdef int row, column
+        cdef int seperator
+        with nogil, parallel(), boundscheck(False):
+            for seperator in prange(0, self.chunkColumns, self.chunksSeperator):            
+                for row in reversed(range(self.chunkRows)):
+                    for column in range(seperator, seperator + self.chunksSeperator / 2):
+                        # printf("chunk %d %d | %d %d | %d\n", row, column, self.chunkRows, self.chunkColumns, seperator)
+                        chunk = &self.chunks[row][column]
+                        if chunk.updateThisFrame:
+                            self.onUpdateChunk(chunk)
+            
+            for seperator in prange(self.chunksSeperator / 2, self.chunkColumns, self.chunksSeperator):            
+                for row in reversed(range(self.chunkRows)):
+                    for column in range(seperator, seperator + self.chunksSeperator / 2):
+                        chunk = &self.chunks[row][column]
+                        if chunk.updateThisFrame:
+                            # printChunk(chunk)
+                            self.onUpdateChunk(chunk)
+
+        # for row in reversed(range(self.chunkRows)):
+        #     for column in range(chunkColumnBeginning, chunkColumnEnd):
+        #         chunk = &self.chunks[row][column]
+        #         if chunk.updateThisFrame:
+        #             self.onUpdateChunk(chunk)
 
     # @Timeit(log="UPDATING", max_time=True, min_time=True, avg_time=True)
     cpdef void update(self):
-        cdef Chunk* chunk
-        cdef int row, column
-        for row in reversed(range(self.chunkRows)):
-            for column in range(self.chunkColumns):
-                chunk = &self.chunks[row][column]
-                if chunk.updateThisFrame:
-                    self.onUpdateChunk(chunk)
+        self.onUpdateSegment()
+        # cdef Chunk* chunk
+        # cdef int row, column
+        # for row in reversed(range(self.chunkRows)):
+        #     for column in range(self.chunkColumns):
+        #         chunk = &self.chunks[row][column]
+        #         if chunk.updateThisFrame:
+        #             self.onUpdateChunk(chunk)
 
     cdef void onRedrawBoard(self) nogil:
         cdef Particle_t* cell
         cdef int i, j
-        with nogil, parallel():
+        with nogil, parallel(num_threads=4), boundscheck(False):
             for i in prange(self.board.height):
                 for j in prange(self.board.width):
+                    # printf("%d %d\n", i, j)
                     cell = getParticle(&self.board, i, j)
                     self.surfaceArrayView[j][i] = cell.color
                     resetParticle(cell)
