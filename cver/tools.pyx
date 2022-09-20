@@ -6,7 +6,7 @@ from libc.stdlib cimport malloc, free
 from tools cimport *
 from cparticle cimport *
 
-cdef extern from "math.h":
+cdef extern from "<math.h>":
     const float INFINITY
     double sqrt(double)
     double round(double)

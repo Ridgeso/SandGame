@@ -5,8 +5,19 @@ from time import perf_counter
 import numpy as np
 cimport numpy as np
 np.import_array()
+
 from cython.parallel import parallel, prange
-from cython cimport boundscheck
+from cython cimport boundscheck, wraparound
+import threading as th
+cdef extern from "<pthread.h>" nogil:
+    ctypedef int pthread_t
+    
+    ctypedef struct pthread_attr_t:
+        pass
+
+    int pthread_create(pthread_t *thread, pthread_attr_t *attr, void *(*start_routine) (void *), void *arg)
+    int pthread_join(pthread_t thread, void **retval)
+
 from libc.stdio cimport printf
 from libc.stdlib cimport malloc, free
 
@@ -19,6 +30,13 @@ ctypedef enum MouseKey:
     LEFT = 0
     SCROLL
     RIGHT
+
+
+ctypedef struct DrawArgs_t:
+    Board* board
+    int** surfaceArrayView
+    int width
+    int start, end
 
 
 cdef class Display:
@@ -35,7 +53,11 @@ cdef class Display:
 
     cdef int chunkSize, chunkRows, chunkColumns
     cdef Chunk** chunks
-    cdef int chunkThreshold, chunksSeperator
+    cdef int chunkThreshold, chunksSeparator
+
+    cdef list threads
+    cdef pthread_t[4] Cthreads
+    cdef DrawArgs_t[4] drawArgs
 
     def __cinit__(self, int y, int x):
         self.winX = y
@@ -84,7 +106,17 @@ cdef class Display:
                 )
             
         self.chunkThreshold = <int>SCALE * self.chunkSize
-        self.chunksSeperator = self.chunkColumns / 4
+        self.chunksSeparator = self.chunkColumns / 4
+
+        self.threads = [None for _ in range(4)]
+
+        cdef int i, separator = self.board.height / 4
+        for i in range(4):
+            self.drawArgs.board = &self.board
+            self.drawArgs.surfaceArrayView = <int**>&self.surfaceArrayView[0][0]
+            self.drawArgs.width = self.board.width
+            self.drawArgs.start = i * separator
+            self.drawArgs.end = (i + 1) * separator
 
     def __dealloc__(self):
         freeBoard(&self.board)
@@ -252,26 +284,16 @@ cdef class Display:
         activateChunk(chunk)
 
     # cdef void onUpdateSegment(self, int chunkColumnBeginning, int chunkColumnEnd):
-    cdef void onUpdateSegment(self):
+    cdef void onUpdateSegment(self, int start, int end):
         cdef Chunk* chunk
         cdef int row, column
         cdef int seperator
-        with nogil, parallel(), boundscheck(False):
-            for seperator in prange(0, self.chunkColumns, self.chunksSeperator):            
-                for row in reversed(range(self.chunkRows)):
-                    for column in range(seperator, seperator + self.chunksSeperator / 2):
-                        # printf("chunk %d %d | %d %d | %d\n", row, column, self.chunkRows, self.chunkColumns, seperator)
-                        chunk = &self.chunks[row][column]
-                        if chunk.updateThisFrame:
-                            self.onUpdateChunk(chunk)
-            
-            for seperator in prange(self.chunksSeperator / 2, self.chunkColumns, self.chunksSeperator):            
-                for row in reversed(range(self.chunkRows)):
-                    for column in range(seperator, seperator + self.chunksSeperator / 2):
-                        chunk = &self.chunks[row][column]
-                        if chunk.updateThisFrame:
-                            # printChunk(chunk)
-                            self.onUpdateChunk(chunk)
+        for row in reversed(range(self.chunkRows)):
+            for column in range(start, end):
+                # printf("chunk %d %d | %d %d | %d\n", row, column, self.chunkRows, self.chunkColumns, seperator)
+                chunk = &self.chunks[row][column]
+                if chunk.updateThisFrame:
+                    self.onUpdateChunk(chunk)
 
         # for row in reversed(range(self.chunkRows)):
         #     for column in range(chunkColumnBeginning, chunkColumnEnd):
@@ -281,7 +303,26 @@ cdef class Display:
 
     # @Timeit(log="UPDATING", max_time=True, min_time=True, avg_time=True)
     cpdef void update(self):
-        self.onUpdateSegment()
+        self.threads[0] = th.Thread(target=self.onUpdateSegment, args=(self, 0, seperator))
+        self.threads[2] = th.Thread(target=self.onUpdateSegment, args=(self, 2 * seperator, 3 * seperator))
+
+        self.threads[0].start()
+        self.threads[2].start()
+        
+        self.threads[0].join()
+        self.threads[2].join()
+        
+        self.threads[1] = th.Thread(target=self.onUpdateSegment, args=(self, seperator, 2 * seperator))
+        self.threads[3] = th.Thread(target=self.onUpdateSegment, args=(self, 3 * seperator, 4 * seperator))
+
+        self.threads[1].start()
+        self.threads[3].start()
+
+        self.threads[1].join()
+        self.threads[3].join()
+
+        # self.onUpdateSegment()
+        
         # cdef Chunk* chunk
         # cdef int row, column
         # for row in reversed(range(self.chunkRows)):
@@ -290,37 +331,66 @@ cdef class Display:
         #         if chunk.updateThisFrame:
         #             self.onUpdateChunk(chunk)
 
-    cdef void onRedrawBoard(self) nogil:
+    cdef void drawSegment(self, int start, int end) nogil:
         cdef Particle_t* cell
         cdef int i, j
-        with nogil, parallel(num_threads=4), boundscheck(False):
-            for i in prange(self.board.height):
-                for j in prange(self.board.width):
-                    # printf("%d %d\n", i, j)
+        with nogil, boundscheck(False), wraparound(False):
+            for i in range(start, end):
+                for j in range(self.board.width):
                     cell = getParticle(&self.board, i, j)
                     self.surfaceArrayView[j][i] = cell.color
                     resetParticle(cell)
 
-    # @Timeit(log="DRAWING", max_time=True, min_time=True, avg_time=True)
-    cpdef void redraw(self):
+    @staticmethod
+    cdef void* CdrawSegment(void* argsPass) nogil:
+        cdef DrawArgs_t* args = <DrawArgs_t*>argsPass
+        cdef Particle_t* cell
+        cdef int i, j
+        with nogil, boundscheck(False), wraparound(False):
+            for i in range(args.start, args.end):
+                for j in range(args.width):
+                    cell = getParticle(args.board, i, j)
+                    args.surfaceArrayView[j][i] = cell.color
+                    resetParticle(cell)
+        return NULL
+
+    cdef void onRedrawBoard(self):
+        cdef int seperator = self.board.height / 4
+        self.threads[0] = th.Thread(target=self.drawSegment, args=(self, 0, seperator))
+        self.threads[1] = th.Thread(target=self.drawSegment, args=(self, seperator, 2 * seperator))
+        self.threads[2] = th.Thread(target=self.drawSegment, args=(self, 2 * seperator, 3 * seperator))
+        self.threads[3] = th.Thread(target=self.drawSegment, args=(self, 3 * seperator, 4 * seperator))
+
+        self.threads[0].start()
+        self.threads[1].start()
+        self.threads[2].start()
+        self.threads[3].start()
+
+        self.threads[0].join()
+        self.threads[1].join()
+        self.threads[2].join()
+        self.threads[3].join()
+
+    @Timeit(log="DRAWING", max_time=True, min_time=True, avg_time=True)
+    def redraw(self):
         self.onRedrawBoard()
                 
         py.surfarray.blit_array(self.surface, self.surfaceArray)
         cdef surf = py.transform.scale(self.surface, (WX, WY))
         self.win.blit(surf, (0, 0))
         
-        cdef int[2][2] chunkRect
-        cdef Chunk* chunk
-        cdef int color
-        for i in range(self.chunkRows):
-            for j in range(self.chunkColumns):
-                chunk = &self.chunks[i][j]
+        # cdef int[2][2] chunkRect
+        # cdef Chunk* chunk
+        # cdef int color
+        # for i in range(self.chunkRows):
+        #     for j in range(self.chunkColumns):
+        #         chunk = &self.chunks[i][j]
                 
-                chunkRect = [[chunk.x * <int>SCALE,     chunk.y * <int>SCALE],
-                                [chunk.width * <int>SCALE, chunk.height * <int>SCALE]]
+        #         chunkRect = [[chunk.x * <int>SCALE,     chunk.y * <int>SCALE],
+        #                         [chunk.width * <int>SCALE, chunk.height * <int>SCALE]]
                             
-                color = 0x00FF00 if chunk.updateThisFrame else 0xFF0000
-                py.draw.rect(self.win, color, chunkRect, 1)
+        #         color = 0x00FF00 if chunk.updateThisFrame else 0xFF0000
+        #         py.draw.rect(self.win, color, chunkRect, 1)
 
     cpdef void reset_chunks(self):
         cdef int row, column
