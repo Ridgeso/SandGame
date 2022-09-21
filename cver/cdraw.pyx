@@ -6,7 +6,6 @@ import numpy as np
 cimport numpy as np
 np.import_array()
 
-from cython.parallel import parallel, prange
 from cython cimport boundscheck, wraparound
 import threading as th
 cdef extern from "<pthread.h>" nogil:
@@ -34,10 +33,14 @@ ctypedef enum MouseKey:
 
 ctypedef struct DrawArgs_t:
     Board* board
-    int** surfaceArrayView
-    int width
+    int* surfaceArrayView
     int start, end
 
+
+cdef void* testThread(void* args) nogil:
+    while True:
+        printf("To dziala xd\n")
+    return NULL
 
 cdef class Display:
     cdef int winY, winX
@@ -53,7 +56,7 @@ cdef class Display:
 
     cdef int chunkSize, chunkRows, chunkColumns
     cdef Chunk** chunks
-    cdef int chunkThreshold, chunksSeparator
+    cdef int chunkThreshold, chunksSeparator, chunksSeparatorGap
 
     cdef list threads
     cdef pthread_t[4] Cthreads
@@ -86,7 +89,6 @@ cdef class Display:
 
         cdef int row, column, chunkHeight, chunkWidth, offset
         
-        # for row in range(0, BOARD_Y, self.chunkSize):
         for row in range(self.chunkRows):
             self.chunks[row] = <Chunk*>malloc(self.chunkColumns * sizeof(Chunk))
 
@@ -94,7 +96,6 @@ cdef class Display:
             offset = BOARD_Y - row * self.chunkSize
             chunkHeight = self.chunkSize if offset > self.chunkSize else offset
             
-            # for column in range(0, BOARD_X, self.chunkSize):
             for column in range(self.chunkColumns):
                 # max chunk size or chunk loss
                 offset = BOARD_X - row * self.chunkSize
@@ -107,16 +108,24 @@ cdef class Display:
             
         self.chunkThreshold = <int>SCALE * self.chunkSize
         self.chunksSeparator = self.chunkColumns / 4
+        self.chunksSeparatorGap = self.chunkColumns % 4
 
         self.threads = [None for _ in range(4)]
 
-        cdef int i, separator = self.board.height / 4
+        # Draw Arguments
+        cdef int separator = self.board.height / 4
+        cdef int separatorGap = self.board.height % 4
+        cdef int i
         for i in range(4):
-            self.drawArgs.board = &self.board
-            self.drawArgs.surfaceArrayView = <int**>&self.surfaceArrayView[0][0]
-            self.drawArgs.width = self.board.width
-            self.drawArgs.start = i * separator
-            self.drawArgs.end = (i + 1) * separator
+            self.drawArgs[i].board = &self.board
+            self.drawArgs[i].surfaceArrayView = <int*>self.surfaceArray.data
+            self.drawArgs[i].start = i * separator
+            self.drawArgs[i].end = (i + 1) * separator
+        self.drawArgs[3].end += separatorGap
+
+        # self.drawArgs[0].surfaceArrayView[3 * boardY + 2] = 58
+
+        pthread_create(&self.Cthreads[0], NULL, &testThread, NULL)
 
     def __dealloc__(self):
         freeBoard(&self.board)
@@ -150,43 +159,43 @@ cdef class Display:
             
         cdef int i, j
         for i in range(self.chunkRows):
-                for j in range(self.chunkColumns):
-                    chunk = &self.chunks[i][j]
+            for j in range(self.chunkColumns):
+                chunk = &self.chunks[i][j]
 
-                    # Calculating relative position between Chunk and Brush (on the left or right side, above or below)
-                    inear.y = max(chunk.y, min(chunk.y + chunk.height, brushPos.y))
-                    inear.x = max(chunk.x, min(chunk.x + chunk.width,  brushPos.x))
-                    ilastNear.y = max(chunk.y, min(chunk.y + chunk.height, lastBrushPos.y))
-                    ilastNear.x = max(chunk.x, min(chunk.x + chunk.width,  lastBrushPos.x))
-                    # Nearest point downsize to the origin
-                    inear = isubv(&inear, &brushPos)
-                    ilastNear = isubv(&ilastNear, &lastBrushPos)
+                # Calculating relative position between Chunk and Brush (on the left or right side, above or below)
+                inear.y = max(chunk.y, min(chunk.y + chunk.height, brushPos.y))
+                inear.x = max(chunk.x, min(chunk.x + chunk.width,  brushPos.x))
+                ilastNear.y = max(chunk.y, min(chunk.y + chunk.height, lastBrushPos.y))
+                ilastNear.x = max(chunk.x, min(chunk.x + chunk.width,  lastBrushPos.x))
+                # Nearest point downsize to the origin
+                inear = isubv(&inear, &brushPos)
+                ilastNear = isubv(&ilastNear, &lastBrushPos)
 
-                    near = ivec2vec(&inear)
-                    lastNear = ivec2vec(&ilastNear)
-                    # if distance is lower than brush radius we have an intersection
-                    distance = length(&near)
-                    if distance <= penSize:  # Chunks around mouse position
-                        activateChunk(chunk)
-                        continue
-                    distance = length(&lastNear)
-                    if distance <= penSize:  # Chunks around mouse previous position
-                        activateChunk(chunk)
-                        continue
+                near = ivec2vec(&inear)
+                lastNear = ivec2vec(&ilastNear)
+                # if distance is lower than brush radius we have an intersection
+                distance = length(&near)
+                if distance <= penSize:  # Chunks around mouse position
+                    activateChunk(chunk)
+                    continue
+                distance = length(&lastNear)
+                if distance <= penSize:  # Chunks around mouse previous position
+                    activateChunk(chunk)
+                    continue
 
-                    leftTop = vec(<float>chunk.y, <float>chunk.x)
-                    rightTop = vec(<float>chunk.y, <float>(chunk.x + chunk.width))
-                    rightBottom = vec(<float>(chunk.y + chunk.height), <float>(chunk.x + chunk.width))
-                    leftBottom = vec(<float>(chunk.y + chunk.height), <float>chunk.x)
+                leftTop = vec(<float>chunk.y, <float>chunk.x)
+                rightTop = vec(<float>chunk.y, <float>(chunk.x + chunk.width))
+                rightBottom = vec(<float>(chunk.y + chunk.height), <float>(chunk.x + chunk.width))
+                leftBottom = vec(<float>(chunk.y + chunk.height), <float>chunk.x)
 
-                    if linePointLen(mousePosChunk, lastMousePosChunk, leftTop) < penSize:
-                        activateChunk(chunk)
-                    elif linePointLen(mousePosChunk, lastMousePosChunk, rightTop) < penSize:
-                        activateChunk(chunk)
-                    elif linePointLen(mousePosChunk, lastMousePosChunk, rightBottom) < penSize:
-                        activateChunk(chunk)
-                    elif linePointLen(mousePosChunk, lastMousePosChunk, leftBottom) < penSize:
-                        activateChunk(chunk)
+                if linePointLen(mousePosChunk, lastMousePosChunk, leftTop) < penSize:
+                    activateChunk(chunk)
+                elif linePointLen(mousePosChunk, lastMousePosChunk, rightTop) < penSize:
+                    activateChunk(chunk)
+                elif linePointLen(mousePosChunk, lastMousePosChunk, rightBottom) < penSize:
+                    activateChunk(chunk)
+                elif linePointLen(mousePosChunk, lastMousePosChunk, leftBottom) < penSize:
+                    activateChunk(chunk)
 
     cpdef void paint_particles(self):
         cdef ivec mousePos
@@ -197,9 +206,7 @@ cdef class Display:
         mousePos.x = mp[0]
 
         if self.lastMousePosition.y == -1 and self.lastMousePosition.x == -1:
-            # print("NADANE")
             self.lastMousePosition = mousePos
-        # print("STOP")
 
         mouseButtonPressed = py.mouse.get_pressed(num_buttons=3)
         keysPressed = py.key.get_pressed()
@@ -283,28 +290,20 @@ cdef class Display:
                         #     )
         activateChunk(chunk)
 
-    # cdef void onUpdateSegment(self, int chunkColumnBeginning, int chunkColumnEnd):
-    cdef void onUpdateSegment(self, int start, int end):
+    cdef void onUpdateSegment(self, int chunkColumnStart, int chunkColumnEnd):
         cdef Chunk* chunk
         cdef int row, column
         cdef int seperator
         for row in reversed(range(self.chunkRows)):
-            for column in range(start, end):
-                # printf("chunk %d %d | %d %d | %d\n", row, column, self.chunkRows, self.chunkColumns, seperator)
+            for column in range(chunkColumnStart, chunkColumnEnd):
                 chunk = &self.chunks[row][column]
                 if chunk.updateThisFrame:
                     self.onUpdateChunk(chunk)
 
-        # for row in reversed(range(self.chunkRows)):
-        #     for column in range(chunkColumnBeginning, chunkColumnEnd):
-        #         chunk = &self.chunks[row][column]
-        #         if chunk.updateThisFrame:
-        #             self.onUpdateChunk(chunk)
-
     # @Timeit(log="UPDATING", max_time=True, min_time=True, avg_time=True)
     cpdef void update(self):
-        self.threads[0] = th.Thread(target=self.onUpdateSegment, args=(self, 0, seperator))
-        self.threads[2] = th.Thread(target=self.onUpdateSegment, args=(self, 2 * seperator, 3 * seperator))
+        self.threads[0] = th.Thread(target=self.onUpdateSegment, args=(self, 0, self.chunksSeparator))
+        self.threads[2] = th.Thread(target=self.onUpdateSegment, args=(self, 2 * self.chunksSeparator, 3 * self.chunksSeparator))
 
         self.threads[0].start()
         self.threads[2].start()
@@ -312,24 +311,14 @@ cdef class Display:
         self.threads[0].join()
         self.threads[2].join()
         
-        self.threads[1] = th.Thread(target=self.onUpdateSegment, args=(self, seperator, 2 * seperator))
-        self.threads[3] = th.Thread(target=self.onUpdateSegment, args=(self, 3 * seperator, 4 * seperator))
+        self.threads[1] = th.Thread(target=self.onUpdateSegment, args=(self, self.chunksSeparator, 2 * self.chunksSeparator))
+        self.threads[3] = th.Thread(target=self.onUpdateSegment, args=(self, 3 * self.chunksSeparator, 4 * self.chunksSeparator + self.chunksSeparatorGap))
 
         self.threads[1].start()
         self.threads[3].start()
 
         self.threads[1].join()
         self.threads[3].join()
-
-        # self.onUpdateSegment()
-        
-        # cdef Chunk* chunk
-        # cdef int row, column
-        # for row in reversed(range(self.chunkRows)):
-        #     for column in range(self.chunkColumns):
-        #         chunk = &self.chunks[row][column]
-        #         if chunk.updateThisFrame:
-        #             self.onUpdateChunk(chunk)
 
     cdef void drawSegment(self, int start, int end) nogil:
         cdef Particle_t* cell
@@ -348,18 +337,19 @@ cdef class Display:
         cdef int i, j
         with nogil, boundscheck(False), wraparound(False):
             for i in range(args.start, args.end):
-                for j in range(args.width):
+                for j in range(args.board.width):
                     cell = getParticle(args.board, i, j)
-                    args.surfaceArrayView[j][i] = cell.color
+                    args.surfaceArrayView[j + i * args.board.height] = cell.color
                     resetParticle(cell)
         return NULL
 
     cdef void onRedrawBoard(self):
-        cdef int seperator = self.board.height / 4
-        self.threads[0] = th.Thread(target=self.drawSegment, args=(self, 0, seperator))
-        self.threads[1] = th.Thread(target=self.drawSegment, args=(self, seperator, 2 * seperator))
-        self.threads[2] = th.Thread(target=self.drawSegment, args=(self, 2 * seperator, 3 * seperator))
-        self.threads[3] = th.Thread(target=self.drawSegment, args=(self, 3 * seperator, 4 * seperator))
+        cdef int separator = self.board.height / 4
+        cdef int separatorGap = self.board.height % 4
+        self.threads[0] = th.Thread(target=self.drawSegment, args=(self, 0, separator))
+        self.threads[1] = th.Thread(target=self.drawSegment, args=(self, separator, 2 * separator))
+        self.threads[2] = th.Thread(target=self.drawSegment, args=(self, 2 * separator, 3 * separator))
+        self.threads[3] = th.Thread(target=self.drawSegment, args=(self, 3 * separator, 4 * separator + separatorGap))
 
         self.threads[0].start()
         self.threads[1].start()
@@ -371,7 +361,14 @@ cdef class Display:
         self.threads[2].join()
         self.threads[3].join()
 
-    @Timeit(log="DRAWING", max_time=True, min_time=True, avg_time=True)
+        # cdef int i
+        # for i in range(4):
+        #     pthread_create(&self.Cthreads[i], NULL, self.CdrawSegment, self.drawArgs[i])
+        
+        # for i in range(4):
+        #     pthread_join(self.Cthreads[i], NULL)
+
+    # @Timeit(log="DRAWING", max_time=True, min_time=True, avg_time=True)
     def redraw(self):
         self.onRedrawBoard()
                 
@@ -388,7 +385,7 @@ cdef class Display:
                 
         #         chunkRect = [[chunk.x * <int>SCALE,     chunk.y * <int>SCALE],
         #                         [chunk.width * <int>SCALE, chunk.height * <int>SCALE]]
-                            
+
         #         color = 0x00FF00 if chunk.updateThisFrame else 0xFF0000
         #         py.draw.rect(self.win, color, chunkRect, 1)
 

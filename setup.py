@@ -7,7 +7,8 @@ app = [
     Extension(
         "cver.cdraw", ['./cver/cdraw.pyx', './cver/vector.c'],
         include_dirs=["./cver"],
-        library_dirs=["./cver"],),
+        library_dirs=["./cver", "./libs"],
+        libraries=["pthread_static_lib"],),
     Extension(
         "cver.cparticle", ['./cver/cparticle.pyx', './cver/vector.c'],
         include_dirs=["./cver"],

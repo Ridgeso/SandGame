@@ -10,3 +10,4 @@ cver/*.c
 *.html
 
 /build
+/libs
