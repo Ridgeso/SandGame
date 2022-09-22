@@ -10,8 +10,8 @@ cdef struct Chunk:
 
 cdef Chunk makeChunk(int y, int x, int height, int width)
 cdef void updateChunk(Chunk* chunk)
-cdef void activateChunk(Chunk* chunk) nogil
-cdef void printChunk(Chunk* chunk) nogil
+cdef void activateChunk(Chunk* chunk)
+cdef void printChunk(Chunk* chunk)
 
 
 cdef struct Board:
@@ -22,13 +22,13 @@ cdef Board initBoard(int height, int width)
 cdef void freeBoard(Board* board)
 cdef void swapParticles(Board* board, Particle_t* cell, int y, int x)
 
-cdef inline bint inBounds(Board* board, int y, int x) nogil:
+cdef inline bint inBounds(Board* board, int y, int x):
     return 0 <= y < board.height and 0 <= x < board.width
 
 cdef inline Particle_t* getParticle(Board* board, int y, int x) nogil:
     return &board.board[y][x]
 
-cdef inline void setParticle(Board* board, int y, int x, Particle_t* particle) with gil:
+cdef inline void setParticle(Board* board, int y, int x, Particle_t* particle):
     board.board[y][x] = particle[0]
 
 

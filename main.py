@@ -2,6 +2,7 @@ import pygame as py
 from values import *
 from src.draw import Display
 # from cver.cdraw import Display
+# from cver.cdrawPthread import Display
 
 
 class SandSim:
