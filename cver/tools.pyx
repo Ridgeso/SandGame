@@ -23,7 +23,7 @@ cdef Chunk makeChunk(int y, int x, int height, int width):
     chunk.shouldBeUpdatedNextFrame = True
     return chunk
 
-cdef void activateChunk(Chunk* chunk):
+cdef void activateChunk(Chunk* chunk) nogil:
     chunk.shouldBeUpdatedNextFrame = True
 
 cdef void deactivateChunk(Chunk* chunk):

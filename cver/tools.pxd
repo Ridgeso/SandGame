@@ -10,7 +10,7 @@ cdef struct Chunk:
 
 cdef Chunk makeChunk(int y, int x, int height, int width)
 cdef void updateChunk(Chunk* chunk)
-cdef void activateChunk(Chunk* chunk)
+cdef void activateChunk(Chunk* chunk) nogil
 cdef void printChunk(Chunk* chunk)
 
 
