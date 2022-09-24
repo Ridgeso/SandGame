@@ -20,9 +20,9 @@ cdef struct Board:
 
 cdef Board initBoard(int height, int width)
 cdef void freeBoard(Board* board)
-cdef void swapParticles(Board* board, Particle_t* cell, int y, int x)
+cdef void swapParticles(Board* board, Particle_t* cell, int y, int x) nogil
 
-cdef inline bint inBounds(Board* board, int y, int x):
+cdef inline bint inBounds(Board* board, int y, int x) nogil:
     return 0 <= y < board.height and 0 <= x < board.width
 
 cdef inline Particle_t* getParticle(Board* board, int y, int x) nogil:
@@ -41,4 +41,4 @@ cdef void paint(Brush* brush, Board* board, ivec mousePos, ivec lastMousePositio
 
 cdef float linePointLen(vec lineStart, vec lineEnd, vec point)
 
-cdef ivec* interpolatePos(ivec* start, ivec* end, int depth)
+cdef ivec* interpolatePos(ivec* start, ivec* end, int depth) nogil

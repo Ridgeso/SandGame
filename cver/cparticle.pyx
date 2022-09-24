@@ -2,8 +2,15 @@ import random
 from values import *
 
 from libc.stdio cimport printf, puts
+from libc.stdlib cimport RAND_MAX, rand, srand
 
 from cparticle cimport *
+
+
+cdef inline float randomize() nogil:
+    return rand() / (1.0 * RAND_MAX)
+cdef inline bint zeroOrOne() nogil:
+    return randomize() > 0.5
 
 
 cdef int[5][4] COLORS = [  # R G B  24bits
@@ -13,9 +20,12 @@ cdef int[5][4] COLORS = [  # R G B  24bits
     [0xFF0000, 0xFF4500, 0xE25822, 0x000000],  # Fire
     [0x0A0A0A, 0x232323, 0x2C2424, 0x000000]   # Smoke
 ]
+cdef float G_GRAVITY = <float>GRAVITY
+cdef float G_AIR_FRICTION = <float>AIR_FRICTION
+srand(0)
 
 
-cdef bint eqParticle(Particle_t* particle, Particle_t* other):
+cdef bint eqParticle(Particle_t* particle, Particle_t* other) nogil:
     if particle == NULL or other == NULL:
         return False
     if other.pType == EMPTY:
@@ -28,23 +38,23 @@ cdef bint eqParticle(Particle_t* particle, Particle_t* other):
 cdef void printParticle(Particle_t* particle):
     printf("Particle at y=%d x=%d\n", particle.pos.y, particle.pos.x)
 
-cdef void pushNeighbors(Board* board, ParticleType particle, ivec* pos):
+cdef void pushNeighbors(Board* board, ParticleType particle, ivec* pos) nogil:
     cdef Particle_t* left
     cdef Particle_t* right
 
     if inBounds(board, pos.y, pos.x - 1):
         left = getParticle(board, pos.y, pos.x - 1)
         if left.pType == particle:
-            if <float>random.random() > left.inertialResistance:
+            if randomize() > left.inertialResistance:
                 left.isFalling = True
 
     if inBounds(board, pos.y, pos.x + 1):
         right = getParticle(board, pos.y, pos.x + 1)
         if right.pType == particle:
-            if <float>random.random() > right.inertialResistance:
+            if randomize() > right.inertialResistance:
                 right.isFalling = True
 
-cdef bint step(Particle_t* particle, Board* board):
+cdef bint step(Particle_t* particle, Board* board) nogil:
     if particle.pType == SAND:
         return sandStep(particle, board)
     elif particle.pType == WATER:
@@ -58,7 +68,7 @@ cdef bint step(Particle_t* particle, Board* board):
     else:
         return False
 
-cdef bint onUpdate(Particle_t* particle, Board* board):
+cdef bint onUpdate(Particle_t* particle, Board* board) nogil:
     if particle.pType == EMPTY:
         return False
     if particle.beenUpdated:
@@ -89,7 +99,7 @@ cdef bint isValid(ParticleType particle, ParticleType spot):
         return False
 
 ##### SAND
-cdef bint sandStep(Particle_t* particle, Board* board):
+cdef bint sandStep(Particle_t* particle, Board* board) nogil:
     cdef bint onBreak = False
 
     cdef Particle_t* neighbor = NULL
@@ -106,9 +116,9 @@ cdef bint sandStep(Particle_t* particle, Board* board):
 
     cdef float velOnHit, direction
 
-    particle.vel.y += <float>GRAVITY
+    particle.vel.y += G_GRAVITY
     if particle.isFalling:
-        particle.vel.x *= <float>AIR_FRICTION
+        particle.vel.x *= G_AIR_FRICTION
 
     targetPosition = roundv(&particle.vel)
     targetPosition = iaddv(&particle.pos, &targetPosition)
@@ -133,19 +143,19 @@ cdef bint sandStep(Particle_t* particle, Board* board):
         
         else:
             if particle.isFalling:
-                velOnHit = max(particle.vel.y * particle.bounciness, <float>2.0)
+                velOnHit = max(particle.vel.y * particle.bounciness, 2.0)
                 if particle.vel.x:
                     particle.vel.x = velOnHit if particle.vel.x > 0.0 else -velOnHit
                 else:
-                    direction = <float>-1.0 if random.randint(0, 1) else <float>1.0
+                    direction = -1.0 if zeroOrOne() else 1.0
                     particle.vel.x = velOnHit * direction
 
             additionalPos = normalize(&particle.vel)
 
             particle.vel.x *= particle.friction * neighbor.friction
-            velOnHit = (particle.vel.y + neighbor.vel.y) / <float>2
-            if velOnHit < <float>GRAVITY:
-                particle.vel.y = <float>GRAVITY
+            velOnHit = (particle.vel.y + neighbor.vel.y) / 2
+            if velOnHit < G_GRAVITY:
+                particle.vel.y = G_GRAVITY
             else:
                 particle.vel.y = velOnHit
 
@@ -154,11 +164,11 @@ cdef bint sandStep(Particle_t* particle, Board* board):
             if -0.1 < additionalPos.y < 0.1:
                 additionalPos.y = 0.0
             else:
-                additionalPos.y = <float>-1.0 if additionalPos.y < 0.0 else <float>1.0
+                additionalPos.y = -1.0 if additionalPos.y < 0.0 else 1.0
             if -0.1 < additionalPos.x < 0.1:
                 additionalPos.x = 0.0
             else:
-                additionalPos.x = <float>-1.0 if additionalPos.x < 0.0 else <float>1.0
+                additionalPos.x = -1.0 if additionalPos.x < 0.0 else 1.0
             iadditionalPos = roundv(&additionalPos)
 
             diagonalNeighborPos = iaddv(&nextPos, &iadditionalPos)
@@ -183,7 +193,7 @@ cdef bint sandStep(Particle_t* particle, Board* board):
                         break
 
                     else:
-                        particle.vel.x *= <float>-1.0
+                        particle.vel.x *= -1.0
 
             particle.isFalling = False
 
@@ -206,7 +216,7 @@ cdef bint sandStep(Particle_t* particle, Board* board):
     swapParticles(board, particle, nextPos.y, nextPos.x)
     return True
 
-cdef bint sandIsValid(ParticleType other):
+cdef bint sandIsValid(ParticleType other) nogil:
     if other == SAND:
         return False
     if other == WOOD:
@@ -220,7 +230,7 @@ cdef Particle_t Sand(int y, int x, bint beenUpdated, bint isFalling):
     sand.isFalling = isFalling
 
     sand.pType = SAND
-    sand.color = COLORS[<int>SAND][random.randint(0, 3)]
+    sand.color = COLORS[<int>SAND][rand() % 4]
 
     sand.pos.y = y
     sand.pos.x = x
@@ -241,7 +251,7 @@ cdef Particle_t Sand(int y, int x, bint beenUpdated, bint isFalling):
 
 
 ##### Water
-cdef bint waterStep(Particle_t* particle, Board* board):
+cdef bint waterStep(Particle_t* particle, Board* board) nogil:
     # BUG: few pixels on the edges aren't moving
 
     cdef bint onBreak = False
@@ -262,9 +272,9 @@ cdef bint waterStep(Particle_t* particle, Board* board):
 
     cdef float velOnHit, direction
 
-    particle.vel.y += <float>GRAVITY
+    particle.vel.y += G_GRAVITY
     if particle.isFalling:
-        particle.vel.x *= <float>AIR_FRICTION
+        particle.vel.x *= G_AIR_FRICTION
 
     cdef ivec ivelocity = roundv(&particle.vel)
     targetPosition = iaddv(&particle.pos, &ivelocity)
@@ -293,7 +303,7 @@ cdef bint waterStep(Particle_t* particle, Board* board):
                 if particle.vel.x:
                     particle.vel.x = velOnHit if particle.vel.x > 0.0 else -velOnHit
                 else:
-                    direction = -1.0 if random.randint(0, 1) else 1.0
+                    direction = -1.0 if zeroOrOne() else 1.0
                     particle.vel.x = velOnHit * direction
 
             additionalPos = normalize(&particle.vel)
@@ -382,7 +392,7 @@ cdef bint waterStep(Particle_t* particle, Board* board):
     swapParticles(board, particle, nextPos.y, nextPos.x)
     return True
 
-cdef bint waterIsValid(ParticleType other):
+cdef bint waterIsValid(ParticleType other) nogil:
     if other == WATER:
         return False
     if other == SAND or other == WOOD:
@@ -396,7 +406,7 @@ cdef Particle_t Water(int y, int x, bint beenUpdated, bint isFalling):
     water.isFalling = isFalling
 
     water.pType = WATER
-    water.color = COLORS[<int>WATER][random.randint(0, 3)]
+    water.color = COLORS[<int>WATER][rand() % 4]
 
     water.pos.y = y
     water.pos.x = x
@@ -417,10 +427,10 @@ cdef Particle_t Water(int y, int x, bint beenUpdated, bint isFalling):
 
 
 ##### WOOD
-cdef bint woodStep(Particle_t* particle, Board* board):
+cdef bint woodStep(Particle_t* particle, Board* board) nogil:
     return False
 
-cdef bint woodIsValid(ParticleType other):
+cdef bint woodIsValid(ParticleType other) nogil:
     if other == WOOD:
         return False
     return True
@@ -432,7 +442,7 @@ cdef Particle_t Wood(int y, int x, bint beenUpdated, bint isFalling):
     wood.isFalling = isFalling
 
     wood.pType = WOOD
-    wood.color = COLORS[<int>WOOD][random.randint(0, 2)]
+    wood.color = COLORS[<int>WOOD][rand() % 3]
 
     wood.pos.y = y
     wood.pos.x = x
@@ -453,12 +463,13 @@ cdef Particle_t Wood(int y, int x, bint beenUpdated, bint isFalling):
 
 
 ##### Fire
-cdef bint fireStep(Particle_t* particle, Board* board):
+cdef bint fireStep(Particle_t* particle, Board* board) nogil:
     cdef Particle_t toEmpty
     
     if particle.heat <= 0:
-        toEmpty = Empty(particle.pos.y, particle.pos.x, False, True)
-        setParticle(board, particle.pos.y, particle.pos.x, &toEmpty)
+        with gil:
+            toEmpty = Empty(particle.pos.y, particle.pos.x, False, True)
+            setParticle(board, particle.pos.y, particle.pos.x, &toEmpty)
         return True
 
     cdef Particle_t* cell
@@ -484,19 +495,21 @@ cdef bint fireStep(Particle_t* particle, Board* board):
                     particle.heat = 100.0
 
             if cell.pType == EMPTY:
-                if not random.randint(0, 51):
-                    toEmpty = Smoke(pos.y, pos.x, False, True)
-                    setParticle(board, pos.y, pos.x, &toEmpty)
+                if randomize() < 0.02:
+                    with gil:
+                        toEmpty = Smoke(pos.y, pos.x, False, True)
+                        setParticle(board, pos.y, pos.x, &toEmpty)
             elif cell.pType == WOOD:
-                if 100.0 * random.random() > cell.flammable:
-                    toEmpty = Fire(pos.y, pos.x, False, True)
-                    setParticle(board, pos.y, pos.x, &toEmpty)
+                if 100.0 * randomize() > cell.flammable:
+                    with gil:
+                        toEmpty = Fire(pos.y, pos.x, False, True)
+                        setParticle(board, pos.y, pos.x, &toEmpty)
 
     # self.color = self.original_color - (abs(self.heat)//100)
     particle.heat -= 1.0
     return True
 
-cdef bint fireIsValid(ParticleType other):
+cdef bint fireIsValid(ParticleType other) nogil:
     if other == FIRE:
         return False
     if other == SAND or other == WATER or other == WOOD:
@@ -510,7 +523,7 @@ cdef Particle_t Fire(int y, int x, bint beenUpdated, bint isFalling):
     fire.isFalling = isFalling
 
     fire.pType = FIRE
-    fire.color = COLORS[<int>FIRE][random.randint(0, 2)]
+    fire.color = COLORS[<int>FIRE][rand() % 3]
 
     fire.pos.y = y
     fire.pos.x = x
@@ -531,12 +544,13 @@ cdef Particle_t Fire(int y, int x, bint beenUpdated, bint isFalling):
 
 
 ##### Smoke
-cdef bint smokeStep(Particle_t* particle, Board* board):
+cdef bint smokeStep(Particle_t* particle, Board* board) nogil:
     cdef Particle_t toEmpty
 
     if particle.lifetime < 0:
-        toEmpty = Empty(particle.pos.y, particle.pos.x, False, True)
-        setParticle(board, particle.pos.y, particle.pos.x, &toEmpty)
+        with gil:
+            toEmpty = Empty(particle.pos.y, particle.pos.x, False, True)
+            setParticle(board, particle.pos.y, particle.pos.x, &toEmpty)
         return False
     particle.lifetime -= 1
 
@@ -548,7 +562,7 @@ cdef bint smokeStep(Particle_t* particle, Board* board):
         if smokeIsValid(cell.pType):
             nextPos.y -= 1
 
-    cdef int direction = random.randint(-1, 1)
+    cdef int direction = 1 if zeroOrOne() else -1
     if not direction:
         swapParticles(board, particle, nextPos.y, nextPos.x)
         return True
@@ -565,7 +579,7 @@ cdef bint smokeStep(Particle_t* particle, Board* board):
     swapParticles(board, particle, nextPos.y, nextPos.x)
     return True
 
-cdef bint smokeIsValid(ParticleType other):
+cdef bint smokeIsValid(ParticleType other) nogil:
     if other == SMOKE:
         return False
     if other == SAND or other == WATER or other == WOOD:
@@ -579,14 +593,14 @@ cdef Particle_t Smoke(int y, int x, bint beenUpdated, bint isFalling):
     smoke.isFalling = isFalling
 
     smoke.pType = SMOKE
-    smoke.color = COLORS[<int>SMOKE][random.randint(0, 2)]
+    smoke.color = COLORS[<int>SMOKE][rand() % 3]
 
     smoke.pos.y = y
     smoke.pos.x = x
     smoke.vel.y = 0.0
     smoke.vel.x = 0.0
     
-    smoke.lifetime = 10.0 + random.random() * 70.0
+    smoke.lifetime = 10.0 + randomize() * 70.0
     smoke.flammable = 100.0
     smoke.heat = 0.0
     smoke.friction = 1.0
@@ -600,7 +614,7 @@ cdef Particle_t Smoke(int y, int x, bint beenUpdated, bint isFalling):
 
 
 ##### EMPTY CELL
-cdef bint emptyIsValid(ParticleType other):
+cdef bint emptyIsValid(ParticleType other) nogil:
     return True
 
 cdef Particle_t Empty(int y, int x, bint beenUpdated, bint isFalling):

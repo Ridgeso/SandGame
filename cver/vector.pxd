@@ -1,4 +1,4 @@
-cdef extern from "vector.h":
+cdef extern from "vector.h" nogil:
     cdef struct ivec:
         int y, x
 

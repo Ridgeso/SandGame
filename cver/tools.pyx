@@ -58,7 +58,7 @@ cdef void freeBoard(Board* board):
         free(<void*>board.board[i])
     free(<void*>board.board)
 
-cdef void swapParticles(Board* board, Particle_t* cell, int y, int x):
+cdef void swapParticles(Board* board, Particle_t* cell, int y, int x) nogil:
     cdef Particle_t swapCell = getParticle(board, y, x)[0]  # Copying the Cell to swap
     
     swapCell.pos = cell.pos
@@ -66,8 +66,9 @@ cdef void swapParticles(Board* board, Particle_t* cell, int y, int x):
     cell.pos.y = y
     cell.pos.x = x
     
-    board.board[y][x] = cell[0]
-    board.board[swapCell.pos.y][swapCell.pos.x] = swapCell
+    with gil:
+        board.board[y][x] = cell[0]
+        board.board[swapCell.pos.y][swapCell.pos.x] = swapCell
 
 
 ##### BRUSH
@@ -98,10 +99,13 @@ cdef void paintPoint(Brush* brush, Board* board, ivec* point):
         setParticle(board, point.y, point.x, &newParticle)
 
 cdef void paintFromTo(Brush* brush, Board* board, ivec* start, ivec* end):
-    cdef ivec* point = interpolatePos(start, end, 0)
+    cdef ivec* point
+    with nogil:
+        point = interpolatePos(start, end, 0)
     while point != NULL:
         paintPoint(brush, board, point)
-        point = interpolatePos(NULL, end, 0)
+        with nogil:
+            point = interpolatePos(NULL, end, 0)
 
 cdef void paint(Brush* brush, Board* board, ivec mousePos, ivec lastMousePosition):
     mousePos.y /= <int>SCALE
@@ -172,7 +176,7 @@ cdef vec[3] unitDistance
 
 cdef ivec[3] out
 
-cdef ivec* interpolatePos(ivec* start, ivec* end, int depth):
+cdef ivec* interpolatePos(ivec* start, ivec* end, int depth) nogil:
     global currentCell, cellDirection
     global distances, unitDistance
     global out

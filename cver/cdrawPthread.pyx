@@ -419,7 +419,7 @@ cdef void* onUpdateSegmentC(void* argsPass) nogil:
                                         continue
                                     newChunk = &args.chunks[newRow + newChunkPos.y][newColumn + newChunkPos.x]
                                     activateChunk(newChunk)
-                # activateChunk(chunk)
+                activateChunk(chunk)
     return NULL
 
 @boundscheck(False)

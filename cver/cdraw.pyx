@@ -278,15 +278,15 @@ cdef class Display:
         if 0 <= row + 1 < self.chunkRows and 0 <= column + 1 < self.chunkColumns:
             activateChunk(&self.chunks[row + 1][column + 1])
     
-    cdef void onUpdateChunk(self, Chunk* chunk):
+    cdef void onUpdateChunk(self, Chunk* chunk) nogil:
         cdef bint haveMoved
         cdef Particle_t* cell
         cdef int i, j
-        # with gil:
         for i in reversed(range(chunk.height)):
             for j in range(chunk.width):
                 cell = getParticle(&self.board, chunk.y + i, chunk.x + j)
                 if cell.pType != EMPTY:
+                    # with gil:
                     haveMoved = onUpdate(cell, &self.board)
                     # if haveMoved:
                     #     self.activateChunksAround(
@@ -307,30 +307,30 @@ cdef class Display:
 
     # @Timeit(log="UPDATING", max_time=True, min_time=True, avg_time=True)
     cpdef void update(self):
-        cdef Chunk* chunk
-        cdef int i, j
-        for i in reversed(range(self.chunkRows)):
-            for j in range(self.chunkColumns):
-                chunk = &self.chunks[i][j]
-                if chunk.updateThisFrame:
-                    self.onUpdateChunk(chunk)
-        # self.threads[0] = th.Thread(target=self.onUpdateSegment, args=(self, 0, self.chunksSeparator))
-        # self.threads[2] = th.Thread(target=self.onUpdateSegment, args=(self, 2 * self.chunksSeparator, 3 * self.chunksSeparator))
+        # cdef Chunk* chunk
+        # cdef int i, j
+        # for i in reversed(range(self.chunkRows)):
+        #     for j in range(self.chunkColumns):
+        #         chunk = &self.chunks[i][j]
+        #         if chunk.updateThisFrame:
+        #             self.onUpdateChunk(chunk)
+        self.threads[0] = th.Thread(target=self.onUpdateSegment, args=(self, 0, self.chunksSeparator))
+        self.threads[2] = th.Thread(target=self.onUpdateSegment, args=(self, 2 * self.chunksSeparator, 3 * self.chunksSeparator))
 
-        # self.threads[0].start()
-        # self.threads[2].start()
+        self.threads[0].start()
+        self.threads[2].start()
         
-        # self.threads[0].join()
-        # self.threads[2].join()
+        self.threads[0].join()
+        self.threads[2].join()
         
-        # self.threads[1] = th.Thread(target=self.onUpdateSegment, args=(self, self.chunksSeparator, 2 * self.chunksSeparator))
-        # self.threads[3] = th.Thread(target=self.onUpdateSegment, args=(self, 3 * self.chunksSeparator, 4 * self.chunksSeparator + self.chunksSeparatorGap))
+        self.threads[1] = th.Thread(target=self.onUpdateSegment, args=(self, self.chunksSeparator, 2 * self.chunksSeparator))
+        self.threads[3] = th.Thread(target=self.onUpdateSegment, args=(self, 3 * self.chunksSeparator, 4 * self.chunksSeparator + self.chunksSeparatorGap))
 
-        # self.threads[1].start()
-        # self.threads[3].start()
+        self.threads[1].start()
+        self.threads[3].start()
 
-        # self.threads[1].join()
-        # self.threads[3].join()
+        self.threads[1].join()
+        self.threads[3].join()
 
     cdef void drawSegment(self, int start, int end) nogil:
         cdef Particle_t* cell
