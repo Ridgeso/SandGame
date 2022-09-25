@@ -7,15 +7,21 @@ cimport numpy as np
 np.import_array()
 
 from cython cimport boundscheck, wraparound
-import threading as th
 cdef extern from "<pthread.h>" nogil:
     ctypedef int pthread_t
-    
     ctypedef struct pthread_attr_t:
         pass
+    ctypedef struct pthread_mutexattr_t:
+        pass
+    ctypedef struct pthread_mutex_t:
+       pass
 
     int pthread_create(pthread_t *thread, pthread_attr_t *attr, void *(*start_routine) (void *), void *arg)
     int pthread_join(pthread_t thread, void **retval)
+    
+    int pthread_mutex_init(pthread_mutex_t *mutex, pthread_mutexattr_t *mutexattr)
+    int pthread_mutex_lock(pthread_mutex_t *mutex)
+    int pthread_mutex_unlock(pthread_mutex_t *mutex)
 
 from libc.stdio cimport printf
 from libc.stdlib cimport malloc, free
@@ -56,8 +62,10 @@ cdef class Display:
 
     cdef int chunkSize, chunkRows, chunkColumns
     cdef Chunk** chunks
-    cdef int chunkThreshold, chunksSeparator, chunksSeparatorGap
 
+    cdef int threadsCount
+    cdef int chunksSeparator, chunksSeparatorGap
+    
     cdef list threads
     cdef pthread_t[4] Cthreads
     cdef UpdateArgs_t[4] updateArgs
@@ -107,8 +115,13 @@ cdef class Display:
                     chunkHeight, chunkWidth
                 )
             
-        self.chunksSeparator = self.chunkColumns / 4
-        self.chunksSeparatorGap = self.chunkColumns % 4
+        if self.chunkColumns < 64:
+            self.threadsCount = 2
+        else:
+            self.threadsCount = 4
+        
+        self.chunksSeparator = self.chunkColumns / (2 * self.threadsCount)
+        self.chunksSeparatorGap = self.chunkColumns % (2 * self.threadsCount)
 
         self.threads = [None for _ in range(4)]
 
@@ -122,16 +135,16 @@ cdef class Display:
         self.updateArgs[3].chunkColumnEnd += self.chunksSeparatorGap
 
         # Draw Arguments
-        cdef int separator = self.board.height / 4
-        cdef int separatorGap = self.board.height % 4
+        cdef int drawSep = self.board.height / 4
+        cdef int drawSepGap = self.board.height % 4
         for i in range(4):
             self.drawArgs[i].board = &self.board
             self.drawArgs[i].surfaceArrayView = <int*>self.surfaceArray.data
-            self.drawArgs[i].start = i * separator
-            self.drawArgs[i].end = (i + 1) * separator
+            self.drawArgs[i].start = i * drawSep
+            self.drawArgs[i].end = (i + 1) * drawSep
             self.drawArgs[i].boardY = <int>BOARD_Y
-        self.drawArgs[3].end += separatorGap
-
+        self.drawArgs[3].end += drawSepGap
+    
     def __dealloc__(self):
         freeBoard(&self.board)
 
@@ -306,31 +319,45 @@ cdef class Display:
                     self.onUpdateChunk(chunk)
 
     # @Timeit(log="UPDATING", max_time=True, min_time=True, avg_time=True)
-    cpdef void update(self):
-        # cdef Chunk* chunk
-        # cdef int i, j
-        # for i in reversed(range(self.chunkRows)):
-        #     for j in range(self.chunkColumns):
-        #         chunk = &self.chunks[i][j]
-        #         if chunk.updateThisFrame:
-        #             self.onUpdateChunk(chunk)
-        self.threads[0] = th.Thread(target=self.onUpdateSegment, args=(self, 0, self.chunksSeparator))
-        self.threads[2] = th.Thread(target=self.onUpdateSegment, args=(self, 2 * self.chunksSeparator, 3 * self.chunksSeparator))
+    cpdef void onUpdate(self):
+        cdef Chunk* chunk
+        cdef int i, j
+        for i in reversed(range(self.chunkRows)):
+            for j in range(self.chunkColumns):
+                chunk = &self.chunks[i][j]
+                if chunk.updateThisFrame:
+                    self.onUpdateChunk(chunk)
 
-        self.threads[0].start()
-        self.threads[2].start()
+        # cdef int i
+        # for i in range(0, self.threadsCount * 2, 2):
+        #     self.threads[i / 2] = th.Thread(target=self.onUpdateSegment, args=(
+        #         self,
+        #         i * self.chunksSeparator,
+        #         (i + 1) * self.chunksSeparator
+        #     ))
+        #     self.threads[i / 2].start()
+
+        # for i in range(self.threadsCount):
+        #     self.threads[i].join()
+
+        # for i in range(1, (self.threadsCount - 1) * 2, 2):
+        #     self.threads[i / 2] = th.Thread(target=self.onUpdateSegment, args=(
+        #         self,
+        #         i * self.chunksSeparator,
+        #         (i + 1) * self.chunksSeparator
+        #     ))
+        #     self.threads[i / 2].start()
         
-        self.threads[0].join()
-        self.threads[2].join()
+        # i = self.threadsCount * 2 - 1
+        # self.threads[i / 2] = th.Thread(target=self.onUpdateSegment, args=(
+        #         self,
+        #         i * self.chunksSeparator,
+        #         (i + 1) * self.chunksSeparator + self.chunksSeparatorGap
+        #     ))
+        # self.threads[i / 2].start()
         
-        self.threads[1] = th.Thread(target=self.onUpdateSegment, args=(self, self.chunksSeparator, 2 * self.chunksSeparator))
-        self.threads[3] = th.Thread(target=self.onUpdateSegment, args=(self, 3 * self.chunksSeparator, 4 * self.chunksSeparator + self.chunksSeparatorGap))
-
-        self.threads[1].start()
-        self.threads[3].start()
-
-        self.threads[1].join()
-        self.threads[3].join()
+        # for i in range(1, self.threadsCount * 2, 2):
+        #     self.threads[i / 2].join()
 
     cdef void drawSegment(self, int start, int end) nogil:
         cdef Particle_t* cell
@@ -342,34 +369,14 @@ cdef class Display:
                     self.surfaceArrayView[j][i] = cell.color
                     resetParticle(cell)
 
-    cdef void onRedrawBoard(self):
-        cdef int separator = self.board.height / 4
-        cdef int separatorGap = self.board.height % 4
-        self.threads[0] = th.Thread(target=self.drawSegment, args=(self, 0, separator))
-        self.threads[1] = th.Thread(target=self.drawSegment, args=(self, separator, 2 * separator))
-        self.threads[2] = th.Thread(target=self.drawSegment, args=(self, 2 * separator, 3 * separator))
-        self.threads[3] = th.Thread(target=self.drawSegment, args=(self, 3 * separator, 4 * separator + separatorGap))
-
-        self.threads[0].start()
-        self.threads[1].start()
-        self.threads[2].start()
-        self.threads[3].start()
-
-        self.threads[0].join()
-        self.threads[1].join()
-        self.threads[2].join()
-        self.threads[3].join()
-
-        # cdef int i
-        # for i in range(4):
-        #     pthread_create(&self.Cthreads[i], NULL, &drawSegmentC, &self.drawArgs[i])
-        
-        # for i in range(4):
-        #     pthread_join(self.Cthreads[i], NULL)
-
     # @Timeit(log="DRAWING", max_time=True, min_time=True, avg_time=True)
     cpdef void redraw(self):
-        self.onRedrawBoard()
+        cdef int i
+        for i in range(4):
+            pthread_create(&self.Cthreads[i], NULL, &drawSegmentC, &self.drawArgs[i])
+        
+        for i in range(4):
+            pthread_join(self.Cthreads[i], NULL)
                 
         py.surfarray.blit_array(self.surface, self.surfaceArray)
         cdef surf = py.transform.scale(self.surface, (WX, WY))
@@ -383,7 +390,7 @@ cdef class Display:
         #         chunk = &self.chunks[i][j]
                 
         #         chunkRect = [[chunk.x * <int>SCALE,     chunk.y * <int>SCALE],
-        #                         [chunk.width * <int>SCALE, chunk.height * <int>SCALE]]
+        #                     [chunk.width * <int>SCALE, chunk.height * <int>SCALE]]
 
         #         color = 0x00FF00 if chunk.updateThisFrame else 0xFF0000
         #         py.draw.rect(self.win, color, chunkRect, 1)

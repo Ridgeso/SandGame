@@ -4,11 +4,6 @@ import numpy
 
 
 app = [
-    # Extension(
-    #     "cver.cdrawPthread", ['./cver/cdrawPthread.pyx', './cver/vector.c'],
-    #     include_dirs=["./cver"],
-    #     library_dirs=["./cver"],
-    #     libraries=["pthread"],),
     Extension(
         "cver.cdraw", ['./cver/cdraw.pyx', './cver/vector.c'],
         include_dirs=["./cver"],

@@ -1,7 +1,7 @@
 import pygame as py
 from values import *
-from src.draw import Display
-# from cver.cdraw import Display
+# from src.draw import Display
+from cver.cdraw import Display
 # from cver.cdrawPthread import Display
 
 
@@ -20,7 +20,7 @@ class SandSim:
             self.clock.tick(FPS)
 
             if self.sim:
-                self.display.update()
+                self.display.onUpdate()
 
             self.display.paint_particles()
             self.display.redraw()
