@@ -1,5 +1,15 @@
 from cparticle cimport *
 from vector cimport *
+cdef extern from "<pthread.h>" nogil:
+    ctypedef struct pthread_mutexattr_t:
+        pass
+    ctypedef struct pthread_mutex_t:
+       pass
+    
+    int pthread_mutex_init(pthread_mutex_t *mutex, pthread_mutexattr_t *mutexattr)
+    int pthread_mutex_destroy(pthread_mutex_t *mutex)
+    int pthread_mutex_lock(pthread_mutex_t *mutex)
+    int pthread_mutex_unlock(pthread_mutex_t *mutex)
 
 
 cdef struct Chunk:
@@ -17,6 +27,7 @@ cdef void printChunk(Chunk* chunk)
 cdef struct Board:
     int height, width
     Particle_t** board
+    pthread_mutex_t mutex
 
 cdef Board initBoard(int height, int width)
 cdef void freeBoard(Board* board)
@@ -28,8 +39,10 @@ cdef inline bint inBounds(Board* board, int y, int x) nogil:
 cdef inline Particle_t* getParticle(Board* board, int y, int x) nogil:
     return &board.board[y][x]
 
-cdef inline void setParticle(Board* board, int y, int x, Particle_t* particle):
+cdef inline void setParticle(Board* board, int y, int x, Particle_t* particle) nogil:
+    pthread_mutex_lock(&board.mutex)
     board.board[y][x] = particle[0]
+    pthread_mutex_unlock(&board.mutex)
 
 
 cdef struct Brush:

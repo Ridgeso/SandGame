@@ -11,17 +11,9 @@ cdef extern from "<pthread.h>" nogil:
     ctypedef int pthread_t
     ctypedef struct pthread_attr_t:
         pass
-    ctypedef struct pthread_mutexattr_t:
-        pass
-    ctypedef struct pthread_mutex_t:
-       pass
 
     int pthread_create(pthread_t *thread, pthread_attr_t *attr, void *(*start_routine) (void *), void *arg)
     int pthread_join(pthread_t thread, void **retval)
-    
-    int pthread_mutex_init(pthread_mutex_t *mutex, pthread_mutexattr_t *mutexattr)
-    int pthread_mutex_lock(pthread_mutex_t *mutex)
-    int pthread_mutex_unlock(pthread_mutex_t *mutex)
 
 from libc.stdio cimport printf
 from libc.stdlib cimport malloc, free
@@ -36,10 +28,15 @@ ctypedef enum MouseKey:
     SCROLL
     RIGHT
 
+
 ctypedef struct UpdateArgs_t:
+    # segment args
     Chunk** chunks
-    int chunkRows
+    int chunkRows, chunkColumns
     int chunkColumnStart, chunkColumnEnd
+    # chunk args
+    Board* board
+    int chunkSize
 
 ctypedef struct DrawArgs_t:
     Board* board
@@ -66,9 +63,8 @@ cdef class Display:
     cdef int threadsCount
     cdef int chunksSeparator, chunksSeparatorGap
     
-    cdef list threads
-    cdef pthread_t[4] Cthreads
-    cdef UpdateArgs_t[4] updateArgs
+    cdef pthread_t[8] threads
+    cdef UpdateArgs_t[8] updateArgs
     cdef DrawArgs_t[4] drawArgs
 
     def __cinit__(self, int y, int x):
@@ -115,6 +111,9 @@ cdef class Display:
                     chunkHeight, chunkWidth
                 )
             
+        cdef int i
+
+        # Update Arguments
         if self.chunkColumns < 64:
             self.threadsCount = 2
         else:
@@ -122,17 +121,15 @@ cdef class Display:
         
         self.chunksSeparator = self.chunkColumns / (2 * self.threadsCount)
         self.chunksSeparatorGap = self.chunkColumns % (2 * self.threadsCount)
-
-        self.threads = [None for _ in range(4)]
-
-        cdef int i
-        # Update Arguments
-        for i in range(4):
+        for i in range(self.threadsCount * 2):
             self.updateArgs[i].chunks = self.chunks
             self.updateArgs[i].chunkRows = self.chunkRows
+            self.updateArgs[i].chunkColumns = self.chunkColumns
             self.updateArgs[i].chunkColumnStart = i * self.chunksSeparator
             self.updateArgs[i].chunkColumnEnd = (i + 1) * self.chunksSeparator
-        self.updateArgs[3].chunkColumnEnd += self.chunksSeparatorGap
+            self.updateArgs[i].board = &self.board
+            self.updateArgs[i].chunkSize = self.chunkSize
+        self.updateArgs[self.threadsCount - 1].chunkColumnEnd += self.chunksSeparatorGap
 
         # Draw Arguments
         cdef int drawSep = self.board.height / 4
@@ -290,110 +287,53 @@ cdef class Display:
             activateChunk(&self.chunks[row + 1][column - 1])
         if 0 <= row + 1 < self.chunkRows and 0 <= column + 1 < self.chunkColumns:
             activateChunk(&self.chunks[row + 1][column + 1])
-    
-    cdef void onUpdateChunk(self, Chunk* chunk) nogil:
-        cdef bint haveMoved
-        cdef Particle_t* cell
-        cdef int i, j
-        for i in reversed(range(chunk.height)):
-            for j in range(chunk.width):
-                cell = getParticle(&self.board, chunk.y + i, chunk.x + j)
-                if cell.pType != EMPTY:
-                    # with gil:
-                    haveMoved = onUpdate(cell, &self.board)
-                    # if haveMoved:
-                    #     self.activateChunksAround(
-                    #         cell.pos.y / self.chunkSize, # row
-                    #         cell.pos.x / self.chunkSize  # column
-                    #     )
-        activateChunk(chunk)
-
-    cdef void onUpdateSegment(self, int chunkColumnStart, int chunkColumnEnd):
-        cdef Chunk* chunk
-        cdef int row, column
-        cdef int seperator
-        for row in reversed(range(self.chunkRows)):
-            for column in range(chunkColumnStart, chunkColumnEnd):
-                chunk = &self.chunks[row][column]
-                if chunk.updateThisFrame:
-                    self.onUpdateChunk(chunk)
 
     # @Timeit(log="UPDATING", max_time=True, min_time=True, avg_time=True)
     cpdef void onUpdate(self):
-        cdef Chunk* chunk
-        cdef int i, j
-        for i in reversed(range(self.chunkRows)):
-            for j in range(self.chunkColumns):
-                chunk = &self.chunks[i][j]
-                if chunk.updateThisFrame:
-                    self.onUpdateChunk(chunk)
+        # cdef Chunk* chunk
+        # cdef int i, j
+        # for i in reversed(range(self.chunkRows)):
+        #     for j in range(self.chunkColumns):
+        #         chunk = &self.chunks[i][j]
+        #         if chunk.updateThisFrame:
+        #             self.onUpdateChunk(chunk)
 
-        # cdef int i
-        # for i in range(0, self.threadsCount * 2, 2):
-        #     self.threads[i / 2] = th.Thread(target=self.onUpdateSegment, args=(
-        #         self,
-        #         i * self.chunksSeparator,
-        #         (i + 1) * self.chunksSeparator
-        #     ))
-        #     self.threads[i / 2].start()
+        cdef int i
+        for i in range(0, self.threadsCount * 2, 2):
+            pthread_create(&self.threads[i], NULL, &onUpdateSegment, &self.updateArgs[i])
+        for i in range(0, self.threadsCount * 2, 2):
+            pthread_join(self.threads[i], NULL)
 
-        # for i in range(self.threadsCount):
-        #     self.threads[i].join()
-
-        # for i in range(1, (self.threadsCount - 1) * 2, 2):
-        #     self.threads[i / 2] = th.Thread(target=self.onUpdateSegment, args=(
-        #         self,
-        #         i * self.chunksSeparator,
-        #         (i + 1) * self.chunksSeparator
-        #     ))
-        #     self.threads[i / 2].start()
-        
-        # i = self.threadsCount * 2 - 1
-        # self.threads[i / 2] = th.Thread(target=self.onUpdateSegment, args=(
-        #         self,
-        #         i * self.chunksSeparator,
-        #         (i + 1) * self.chunksSeparator + self.chunksSeparatorGap
-        #     ))
-        # self.threads[i / 2].start()
-        
         # for i in range(1, self.threadsCount * 2, 2):
-        #     self.threads[i / 2].join()
-
-    cdef void drawSegment(self, int start, int end) nogil:
-        cdef Particle_t* cell
-        cdef int i, j
-        with boundscheck(False), wraparound(False):
-            for i in range(start, end):
-                for j in range(self.board.width):
-                    cell = getParticle(&self.board, i, j)
-                    self.surfaceArrayView[j][i] = cell.color
-                    resetParticle(cell)
+        #     pthread_create(&self.threads[i], NULL, &onUpdateSegment, &self.updateArgs[i])
+        # for i in range(1, self.threadsCount * 2, 2):
+        #     pthread_join(self.threads[i], NULL)
 
     # @Timeit(log="DRAWING", max_time=True, min_time=True, avg_time=True)
     cpdef void redraw(self):
         cdef int i
         for i in range(4):
-            pthread_create(&self.Cthreads[i], NULL, &drawSegmentC, &self.drawArgs[i])
+            pthread_create(&self.threads[i], NULL, &drawSegmentC, &self.drawArgs[i])
         
         for i in range(4):
-            pthread_join(self.Cthreads[i], NULL)
+            pthread_join(self.threads[i], NULL)
                 
         py.surfarray.blit_array(self.surface, self.surfaceArray)
         cdef surf = py.transform.scale(self.surface, (WX, WY))
         self.win.blit(surf, (0, 0))
         
-        # cdef int[2][2] chunkRect
-        # cdef Chunk* chunk
-        # cdef int color
-        # for i in range(self.chunkRows):
-        #     for j in range(self.chunkColumns):
-        #         chunk = &self.chunks[i][j]
+        cdef int[2][2] chunkRect
+        cdef Chunk* chunk
+        cdef int color
+        for i in range(self.chunkRows):
+            for j in range(self.chunkColumns):
+                chunk = &self.chunks[i][j]
                 
-        #         chunkRect = [[chunk.x * <int>SCALE,     chunk.y * <int>SCALE],
-        #                     [chunk.width * <int>SCALE, chunk.height * <int>SCALE]]
+                chunkRect = [[chunk.x * <int>SCALE,     chunk.y * <int>SCALE],
+                            [chunk.width * <int>SCALE, chunk.height * <int>SCALE]]
 
-        #         color = 0x00FF00 if chunk.updateThisFrame else 0xFF0000
-        #         py.draw.rect(self.win, color, chunkRect, 1)
+                color = 0x00FF00 if chunk.updateThisFrame else 0xFF0000
+                py.draw.rect(self.win, color, chunkRect, 1)
 
     cpdef void reset_chunks(self):
         cdef int row, column
@@ -404,6 +344,55 @@ cdef class Display:
     cdef void map_colors(self):
         pass
 
+
+@boundscheck(False)
+@wraparound(False)
+cdef void* onUpdateSegment(void* argsPass) nogil:
+    cdef UpdateArgs_t* args = <UpdateArgs_t*>argsPass
+    # Segment variables
+    cdef Chunk* chunk
+    cdef int row, column
+    cdef int seperator
+    
+    # Chunk variables
+    cdef ivec chunkUpdate
+    cdef bint haveMoved
+    cdef Particle_t* cell
+    cdef int i, j
+    cdef int y, x
+
+    # Segment script
+    for row in reversed(range(args.chunkRows)):
+        for column in range(args.chunkColumnStart, args.chunkColumnEnd):
+            chunk = &args.chunks[row][column]
+            if not chunk.updateThisFrame:
+                continue
+
+            # Chunk script
+            for i in reversed(range(chunk.height)):
+                for j in range(chunk.width):
+                    cell = getParticle(args.board, chunk.y + i, chunk.x + j)
+                    if cell.pType == EMPTY:
+                        continue
+
+                    haveMoved = onUpdate(cell, args.board)
+                    if not haveMoved:
+                        continue
+                    
+                    # activateChunksAround
+                    # chunkUpdate.y = cell.pos.y / args.chunkSize
+                    # chunkUpdate.x = cell.pos.x / args.chunkSize
+                    # for y in range(-1, 2):
+                    #     for x in range(-1, 2):
+                    #         if y == 0 == x:
+                    #             continue
+                    #         if not 0 <= chunkUpdate.y + y < args.chunkRows:
+                    #             continue
+                    #         if not 0 <= chunkUpdate.x + x < args.chunkColumns:
+                    #             continue
+                    #         activateChunk(&args.chunks[chunkUpdate.y + y][chunkUpdate.x + x])
+            activateChunk(chunk)
+    return NULL
 
 @boundscheck(False)
 @wraparound(False)

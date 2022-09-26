@@ -12,11 +12,13 @@ app = [
     Extension(
         "cver.cparticle", ['./cver/cparticle.pyx', './cver/vector.c'],
         include_dirs=["./cver"],
-        library_dirs=["./cver"],),
+        library_dirs=["./cver"],
+        libraries=["pthread"],),
     Extension(
         "cver.tools", ['./cver/tools.pyx', './cver/vector.c'],
         include_dirs=["./cver"],
-        library_dirs=["./cver"],)
+        library_dirs=["./cver"],
+        libraries=["pthread"],)
 ]
 
 setup(

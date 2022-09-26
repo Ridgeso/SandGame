@@ -49,6 +49,8 @@ cdef Board initBoard(int height, int width):
         board.board[i] = <Particle_t*>malloc(width * sizeof(Particle_t))
         for j in range(width):
             board.board[i][j] = Empty(i, j, False, True)
+    
+    pthread_mutex_init(&board.mutex, NULL)
         
     return board
 
@@ -58,17 +60,27 @@ cdef void freeBoard(Board* board):
         free(<void*>board.board[i])
     free(<void*>board.board)
 
+    pthread_mutex_destroy(&board.mutex)
+
 cdef void swapParticles(Board* board, Particle_t* cell, int y, int x) nogil:
     cdef Particle_t swapCell = getParticle(board, y, x)[0]  # Copying the Cell to swap
-    
+
     swapCell.pos = cell.pos
 
     cell.pos.y = y
     cell.pos.x = x
-    
-    with gil:
-        board.board[y][x] = cell[0]
-        board.board[swapCell.pos.y][swapCell.pos.x] = swapCell
+
+    # ERROR: Segmentation Fault
+    setParticle(board, y, x, cell)
+    setParticle(board, swapCell.pos.y, swapCell.pos.x, &swapCell)
+
+    # pthread_mutex_lock(&board.mutex)
+
+    # printf("THREAD %d\n", x / 180)
+    # board.board[y][x] = cell[0]
+    # board.board[swapCell.pos.y][swapCell.pos.x] = swapCell
+
+    # pthread_mutex_unlock(&board.mutex)
 
 
 ##### BRUSH
