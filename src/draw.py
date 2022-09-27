@@ -194,7 +194,7 @@ class Display:
                         self.activate_chunks_around(chunk_pos.y, chunk_pos.x)
 
     # @tools.Timeit(log="UPDATING", max_time=True, min_time=True, avg_time=True)
-    def update(self) -> None:
+    def onUpdate(self) -> None:
         for chunk_row in reversed(self.chunks):
             for chunk in chunk_row:
                 if chunk.is_active():
