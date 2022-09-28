@@ -25,6 +25,8 @@ setup(
     name="SandGameInCython",
     packages=find_packages(),
     ext_modules=cythonize(app),
+    # TODO: Make it work for language_level=3
+    # ext_modules=cythonize(app, compiler_directives={'language_level' : "3"}),
     include_dirs=[numpy.get_include()],
     options={
         "build": {

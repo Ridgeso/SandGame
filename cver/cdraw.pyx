@@ -87,8 +87,8 @@ cdef class Display:
 
         # Chunks
         self.chunkSize = 10  # 10 x 10
-        self.chunkRows = BOARD_Y / self.chunkSize
-        self.chunkColumns = BOARD_X / self.chunkSize
+        self.chunkRows = BOARD_Y / self.chunkSize + (1 if BOARD_Y % self.chunkSize else 0)
+        self.chunkColumns = BOARD_X / self.chunkSize + (1 if BOARD_X % self.chunkSize else 0)
 
         self.chunks = <Chunk**>malloc(self.chunkRows * sizeof(Chunk*))
 
@@ -288,21 +288,41 @@ cdef class Display:
         if 0 <= row + 1 < self.chunkRows and 0 <= column + 1 < self.chunkColumns:
             activateChunk(&self.chunks[row + 1][column + 1])
 
+    cdef void onUpdateChunk(self, Chunk* chunk):
+        cdef ivec chunkUpdate
+        cdef bint haveMoved
+        cdef Particle_t* cell
+        cdef int i, j
+        cdef int y, x
+        for i in reversed(range(chunk.height)):
+            for j in range(chunk.width):
+                cell = getParticle(&self.board, chunk.y + i, chunk.x + j)
+                if cell.pType == EMPTY:
+                    continue
+
+                haveMoved = onUpdate(cell, &self.board)
+                # if not haveMoved:
+                #     chunkUpdate.y = cell.pos.y / args.chunkSize
+                #     chunkUpdate.x = cell.pos.x / args.chunkSize
+                #     self.activateChunksAround(chunkUpdate.y, chunkUpdate.x)
+                
+        activateChunk(chunk)
+
     # @Timeit(log="UPDATING", max_time=True, min_time=True, avg_time=True)
     cpdef void onUpdate(self):
-        # cdef Chunk* chunk
-        # cdef int i, j
-        # for i in reversed(range(self.chunkRows)):
-        #     for j in range(self.chunkColumns):
-        #         chunk = &self.chunks[i][j]
-        #         if chunk.updateThisFrame:
-        #             self.onUpdateChunk(chunk)
+        cdef Chunk* chunk
+        cdef int i, j
+        for i in reversed(range(self.chunkRows)):
+            for j in range(self.chunkColumns):
+                chunk = &self.chunks[i][j]
+                if chunk.updateThisFrame:
+                    self.onUpdateChunk(chunk)
 
-        cdef int i
-        for i in range(0, self.threadsCount * 2, 2):
-            pthread_create(&self.threads[i], NULL, &onUpdateSegment, &self.updateArgs[i])
-        for i in range(0, self.threadsCount * 2, 2):
-            pthread_join(self.threads[i], NULL)
+        # cdef int i
+        # for i in range(0, self.threadsCount * 2, 2):
+        #     pthread_create(&self.threads[i], NULL, &onUpdateSegment, &self.updateArgs[i])
+        # for i in range(0, self.threadsCount * 2, 2):
+        #     pthread_join(self.threads[i], NULL)
 
         # for i in range(1, self.threadsCount * 2, 2):
         #     pthread_create(&self.threads[i], NULL, &onUpdateSegment, &self.updateArgs[i])
