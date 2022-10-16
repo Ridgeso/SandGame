@@ -3,8 +3,8 @@ from values import *
 from libc.stdio cimport printf
 from libc.stdlib cimport malloc, free
 
-from tools cimport *
-from cparticle cimport *
+from cver.tools cimport *
+from cver.cparticle cimport *
 
 cdef extern from "<math.h>":
     const float INFINITY
@@ -60,28 +60,34 @@ cdef void freeBoard(Board* board):
         free(<void*>board.board[i])
     free(<void*>board.board)
 
-    pthread_mutex_destroy(&board.mutex)
+    pthread_mutex_destroy(&board.mutex) 
 
 cdef void swapParticles(Board* board, Particle_t* cell, int y, int x) nogil:
     cdef Particle_t swapCell = getParticle(board, y, x)[0]  # Copying the Cell to swap
+    cdef Particle_t cellCopy = cell[0]
 
-    swapCell.pos = cell.pos
+    swapCell.pos = cellCopy.pos
+    # swapCell.pos = cell.pos
 
-    cell.pos.y = y
-    cell.pos.x = x
+    cellCopy.pos.y = y
+    cellCopy.pos.x = x
+    # cell.pos.y = y
+    # cell.pos.x = x
 
-    # ERROR: Segmentation Fault
-    setParticle(board, y, x, cell)
-    setParticle(board, swapCell.pos.y, swapCell.pos.x, &swapCell)
-
-    # pthread_mutex_lock(&board.mutex)
-
-    # printf("THREAD %d\n", x / 180)
+    # printf("To Cell %p | From cell %p | pos %d %d | poss %d %d\n", &board.board[y][x], cell, y, x, cell.pos.y, cell.pos.x)
+    pthread_mutex_lock(&board.mutex)
+    
     # board.board[y][x] = cell[0]
-    # board.board[swapCell.pos.y][swapCell.pos.x] = swapCell
+    board.board[y][x] = cellCopy
+    
+    # printf("%d %d (%d %d) is in bounds %d\n", y, x, board.height, board.width, inBounds(board, y, x))
+    # board.board[y % 10][x % 10] = cellCopy
+    # board.board[10][10] = cellCopy
+    # board.board[10][10].color = cellCopy.color
 
-    # pthread_mutex_unlock(&board.mutex)
-
+    board.board[swapCell.pos.y][swapCell.pos.x] = swapCell    
+    
+    pthread_mutex_unlock(&board.mutex)
 
 ##### BRUSH
 cdef Brush initBrush():

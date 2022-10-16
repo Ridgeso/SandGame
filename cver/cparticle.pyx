@@ -4,7 +4,7 @@ from values import *
 from libc.stdio cimport printf, puts
 from libc.stdlib cimport RAND_MAX, rand, srand
 
-from cparticle cimport *
+from cver.cparticle cimport *
 
 
 cdef inline float randomize() nogil:

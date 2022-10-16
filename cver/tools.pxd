@@ -1,6 +1,9 @@
-from cparticle cimport *
-from vector cimport *
+from cver.cparticle cimport *
+from cver.vector cimport *
 cdef extern from "<pthread.h>" nogil:
+    """
+    #define _OPEN_THREADS
+    """
     ctypedef struct pthread_mutexattr_t:
         pass
     ctypedef struct pthread_mutex_t:

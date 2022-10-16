@@ -1,5 +1,5 @@
-from vector cimport *
-from tools cimport *
+from cver.vector cimport *
+from cver.tools cimport *
 
 
 cdef enum ParticleType:

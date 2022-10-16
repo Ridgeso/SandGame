@@ -12,15 +12,15 @@ cdef extern from "<pthread.h>" nogil:
     ctypedef struct pthread_attr_t:
         pass
 
-    int pthread_create(pthread_t *thread, pthread_attr_t *attr, void *(*start_routine) (void *), void *arg)
+    int pthread_create(pthread_t *thread, pthread_attr_t *attr, void* (*start_routine) (void *), void *arg)
     int pthread_join(pthread_t thread, void **retval)
 
 from libc.stdio cimport printf
 from libc.stdlib cimport malloc, free
 
-from vector cimport *
-from cparticle cimport *
-from tools cimport *
+from cver.vector cimport *
+from cver.cparticle cimport *
+from cver.tools cimport *
 
 
 ctypedef enum MouseKey:
@@ -87,8 +87,8 @@ cdef class Display:
 
         # Chunks
         self.chunkSize = 10  # 10 x 10
-        self.chunkRows = BOARD_Y / self.chunkSize + (1 if BOARD_Y % self.chunkSize else 0)
-        self.chunkColumns = BOARD_X / self.chunkSize + (1 if BOARD_X % self.chunkSize else 0)
+        self.chunkRows = BOARD_Y // self.chunkSize + (1 if BOARD_Y % self.chunkSize else 0)
+        self.chunkColumns = BOARD_X // self.chunkSize + (1 if BOARD_X % self.chunkSize else 0)
 
         self.chunks = <Chunk**>malloc(self.chunkRows * sizeof(Chunk*))
 
@@ -119,7 +119,7 @@ cdef class Display:
         else:
             self.threadsCount = 4
         
-        self.chunksSeparator = self.chunkColumns / (2 * self.threadsCount)
+        self.chunksSeparator = self.chunkColumns // (2 * self.threadsCount)
         self.chunksSeparatorGap = self.chunkColumns % (2 * self.threadsCount)
         for i in range(self.threadsCount * 2):
             self.updateArgs[i].chunks = self.chunks
@@ -132,7 +132,7 @@ cdef class Display:
         self.updateArgs[self.threadsCount - 1].chunkColumnEnd += self.chunksSeparatorGap
 
         # Draw Arguments
-        cdef int drawSep = self.board.height / 4
+        cdef int drawSep = self.board.height // 4
         cdef int drawSepGap = self.board.height % 4
         for i in range(4):
             self.drawArgs[i].board = &self.board
@@ -153,11 +153,11 @@ cdef class Display:
     cdef void _activateChunkOnDraw(self, ivec mousePos):
         cdef Chunk* chunk
         cdef ivec brushPos = mousePos
-        brushPos.y /= SCALE
-        brushPos.x /= SCALE
+        brushPos.y //= SCALE
+        brushPos.x //= SCALE
         cdef ivec lastBrushPos = self.lastMousePosition
-        lastBrushPos.y /= SCALE
-        lastBrushPos.x /= SCALE
+        lastBrushPos.y //= SCALE
+        lastBrushPos.x //= SCALE
 
         cdef ivec inear, ilastNear
         cdef vec near, lastNear
@@ -166,11 +166,11 @@ cdef class Display:
         cdef vec leftTop, rightTop, rightBottom, leftBottom 
 
         cdef vec mousePosChunk = ivec2vec(&mousePos)
-        mousePosChunk.y /= SCALE
-        mousePosChunk.x /= SCALE
+        mousePosChunk.y //= SCALE
+        mousePosChunk.x //= SCALE
         cdef vec lastMousePosChunk = ivec2vec(&self.lastMousePosition)
-        lastMousePosChunk.y /= SCALE
-        lastMousePosChunk.x /= SCALE
+        lastMousePosChunk.y //= SCALE
+        lastMousePosChunk.x //= SCALE
             
         cdef int i, j
         for i in range(self.chunkRows):
