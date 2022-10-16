@@ -5,6 +5,7 @@ from libc.stdio cimport printf, puts
 from libc.stdlib cimport RAND_MAX, rand, srand
 
 from cver.cparticle cimport *
+srand(0)
 
 
 cdef inline float randomize() nogil:
@@ -22,7 +23,6 @@ cdef int[5][4] COLORS = [  # R G B  24bits
 ]
 cdef float G_GRAVITY = <float>GRAVITY
 cdef float G_AIR_FRICTION = <float>AIR_FRICTION
-srand(0)
 
 
 cdef bint eqParticle(Particle_t* particle, Particle_t* other) nogil:

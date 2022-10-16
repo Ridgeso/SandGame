@@ -1,5 +1,6 @@
 from setuptools import setup, find_packages, Extension
 from Cython.Build import cythonize
+from Cython.Distutils import build_ext
 import numpy
 from os import path
 
@@ -8,22 +9,16 @@ vector_path = path.join('cver', 'vector.c')
 app = [
     Extension(
         "cver.cdraw", [path.join('cver', 'cdraw.pyx'), vector_path],
-        # include_dirs=["cver"],
-        # library_dirs=["cver"],
-        # include_path=["cver"],
-        libraries=["pthread"],),
+        libraries=["pthread"]
+    ),
     Extension(
         "cver.cparticle", [path.join('cver', 'cparticle.pyx'), vector_path],
-        # include_dirs=["cver"],
-        # library_dirs=["cver"],
-        # include_path=["cver"],
-        libraries=["pthread"],),
+        libraries=["pthread"]
+    ),
     Extension(
         "cver.tools", [path.join('cver', 'tools.pyx'), vector_path],
-        # include_dirs=["cver"],
-        # library_dirs=["cver"],
-        # include_path=["cver"],
-        libraries=["pthread"],)
+        libraries=["pthread"]
+    )
 ]
 
 setup(
@@ -38,4 +33,7 @@ setup(
             "build_lib": "."
         }
     },
+    cmdclass={
+        'build_ext': build_ext
+    }
 )
